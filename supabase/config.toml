@@ -1,1 +1,4 @@
 project_id = "xgfluxcbedqpbrfbckgl"
+
+[functions.speech-therapy]
+verify_jwt = false
