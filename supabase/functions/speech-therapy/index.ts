@@ -108,12 +108,12 @@ serve(async (req) => {
     const responseText =
       aiData.choices?.[0]?.message?.content || "Great job! Let's keep going!";
 
-    // Generate TTS with smallest.ai if key is available
+    // Generate TTS with smallest.ai Lightning v3.1 if key is available
     let audioBase64: string | null = null;
     if (SMALLEST_API_KEY) {
       try {
         const ttsResponse = await fetch(
-          "https://waves-api.smallest.ai/api/v1/lightning/get_speech",
+          "https://waves-api.smallest.ai/api/v1/lightning-v3.1/stream",
           {
             method: "POST",
             headers: {
@@ -121,23 +121,74 @@ serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              text: responseText,
-              voice_id: "emily",
+              text: responseText.replace(/[*#_~`]/g, ''),
+              voice_id: "sophia",
               sample_rate: 24000,
               speed: 0.9,
-              add_wav_header: true,
+              language: "en",
+              output_format: "wav",
             }),
           }
         );
 
         if (ttsResponse.ok) {
-          const audioBuffer = await ttsResponse.arrayBuffer();
-          const uint8Array = new Uint8Array(audioBuffer);
-          let binaryString = "";
-          for (let i = 0; i < uint8Array.length; i++) {
-            binaryString += String.fromCharCode(uint8Array[i]);
+          const responseBody = await ttsResponse.text();
+          const audioChunks: string[] = [];
+          for (const line of responseBody.split("\n")) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith("data:")) {
+              const jsonStr = trimmed.slice(5).trim();
+              if (jsonStr && jsonStr !== "[DONE]") {
+                try {
+                  const parsed = JSON.parse(jsonStr);
+                  if (parsed.audio) {
+                    audioChunks.push(parsed.audio);
+                  }
+                } catch {
+                  // raw base64 chunk
+                  audioChunks.push(jsonStr);
+                }
+              }
+            }
           }
-          audioBase64 = btoa(binaryString);
+          if (audioChunks.length > 0) {
+            // Decode all base64 chunks, concatenate raw bytes, re-encode
+            const allBytes: number[] = [];
+            for (const chunk of audioChunks) {
+              const binary = atob(chunk);
+              for (let i = 0; i < binary.length; i++) {
+                allBytes.push(binary.charCodeAt(i));
+              }
+            }
+            // Create WAV header for raw PCM data
+            const sampleRate = 24000;
+            const numChannels = 1;
+            const bitsPerSample = 16;
+            const dataSize = allBytes.length;
+            const header = new ArrayBuffer(44);
+            const view = new DataView(header);
+            const writeString = (offset: number, str: string) => {
+              for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+            };
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + dataSize, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+            view.setUint16(32, numChannels * bitsPerSample / 8, true);
+            view.setUint16(34, bitsPerSample, true);
+            writeString(36, 'data');
+            view.setUint32(40, dataSize, true);
+            const headerBytes = new Uint8Array(header);
+            let binaryStr = "";
+            for (let i = 0; i < headerBytes.length; i++) binaryStr += String.fromCharCode(headerBytes[i]);
+            for (let i = 0; i < allBytes.length; i++) binaryStr += String.fromCharCode(allBytes[i]);
+            audioBase64 = btoa(binaryStr);
+          }
         } else {
           console.error("TTS error:", ttsResponse.status, await ttsResponse.text());
         }
