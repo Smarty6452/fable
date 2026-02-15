@@ -193,20 +193,20 @@ export default function HomePage() {
 
                 {/* Speech bubble */}
                 <motion.div
-                  initial={{ opacity: 0, scale: 0, x: 20 }}
+                  initial={{ opacity: 0, scale: 0, x: -20 }}
                   animate={{ opacity: 1, scale: 1, x: 0 }}
                   transition={{ delay: 0.8, type: "spring", bounce: 0.4 }}
-                  className="absolute -right-4 md:right-[-100px] top-4 md:top-8 z-20"
+                  className="absolute -right-8 top-12 md:right-[-160px] md:top-16 z-20 w-[180px] md:w-[220px]"
                 >
-                  <div className="relative bg-white/95 backdrop-blur-xl px-5 py-3 rounded-2xl shadow-xl border-2 border-white max-w-[200px]">
-                    <p className="text-sm font-bold text-slate-700 leading-snug">
+                  <div className="relative bg-white/95 backdrop-blur-xl px-4 py-3 rounded-2xl shadow-xl border-2 border-white">
+                    <p className="text-xs md:text-sm font-bold text-slate-700 leading-snug">
                       <TypeWriter
                         text={existingUser ? `Hey ${existingUser}! Ready to play?` : "Hi there! I'm Wolfie! Let's practice sounds together!"}
                         delay={1200}
                       />
                     </p>
-                    {/* Speech bubble tail */}
-                    <div className="absolute -left-2 top-6 w-4 h-4 bg-white/95 border-l-2 border-b-2 border-white rotate-45" />
+                    {/* Speech bubble tail pointing left to mascot */}
+                    <div className="absolute -left-2 top-4 w-4 h-4 bg-white/95 border-l-2 border-b-2 border-white rotate-45" />
                   </div>
                 </motion.div>
 
