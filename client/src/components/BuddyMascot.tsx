@@ -179,20 +179,32 @@ export default function BuddyMascot({
       }
     >
       <svg viewBox="0 0 280 280" className="w-full h-full drop-shadow-2xl overflow-visible">
-        {/* Glow Aura */}
+        {/* Glow Aura - Enhanced for Listening */}
         <motion.ellipse 
           cx="140" cy="150" rx="120" ry="110" 
-          fill={config.color} 
-          opacity="0.15" 
-          animate={{ scale: [1, 1.1, 1], opacity: [0.1, 0.2, 0.1] }}
-          transition={{ duration: 4, repeat: Infinity }}
+          fill={isListening ? "#55E6C1" : config.color} 
+          opacity={isListening ? "0.3" : "0.15"}
+          animate={isListening 
+            ? { scale: [1, 1.2, 1], opacity: [0.2, 0.4, 0.2] } 
+            : { scale: [1, 1.1, 1], opacity: [0.1, 0.2, 0.1] }
+          }
+          transition={isListening 
+            ? { duration: 1.5, repeat: Infinity } 
+            : { duration: 4, repeat: Infinity }
+          }
         />
         <motion.ellipse 
           cx="140" cy="150" rx="90" ry="80" 
-          fill={config.color} 
-          opacity="0.2" 
-          animate={{ scale: [1, 1.15, 1], opacity: [0.15, 0.25, 0.15] }}
-          transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
+          fill={isListening ? "#55E6C1" : config.color} 
+          opacity={isListening ? "0.4" : "0.2"} 
+          animate={isListening 
+            ? { scale: [1, 1.25, 1], opacity: [0.3, 0.5, 0.3] } 
+            : { scale: [1, 1.15, 1], opacity: [0.15, 0.25, 0.15] }
+          }
+          transition={isListening 
+            ? { duration: 1.5, repeat: Infinity, delay: 0.2 } 
+            : { duration: 3, repeat: Infinity, delay: 0.5 }
+          }
         />
 
         {/* Shadow */}

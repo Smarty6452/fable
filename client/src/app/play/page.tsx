@@ -755,6 +755,26 @@ export default function PlayPage() {
             exit={{ opacity: 0, scale: 0.8 }}
             className="flex flex-col items-center w-full max-w-2xl text-center pt-2 relative z-10"
           >
+            {/* Practice Header */}
+            <div className="w-full flex justify-between items-center mb-6 px-4 absolute top-0 left-0 right-0 z-50">
+               <motion.button 
+                 onClick={() => setGameState("select")}
+                 whileHover={{ scale: 1.05 }} 
+                 whileTap={{ scale: 0.95 }}
+                 className="p-3 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border-2 border-white/80 hover:bg-slate-100 transition-colors"
+               >
+                 <ArrowLeft size={20} className="text-slate-700" />
+               </motion.button>
+               
+               <div className="bg-white/80 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border-2 border-white/80 flex items-center gap-2">
+                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                 <span className="text-xs font-black uppercase tracking-widest text-slate-500">Live Session</span>
+               </div>
+
+               <div className="bg-white/80 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border-2 border-white/80">
+                 <span className="text-xs font-black text-primary">{xp} XP</span>
+               </div>
+            </div>
             <div className="mb-6 relative w-72 h-72 md:w-96 md:h-96 flex items-center justify-center">
               <BuddyMascot 
                 isListening={isListening} 
