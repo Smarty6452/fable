@@ -122,7 +122,7 @@ export default function HomePage() {
             <Volume2 size={22} />
           </motion.div>
           <span className="text-xl font-black text-slate-800 tracking-tight group-hover:text-[#8B7FDE] transition-colors">
-            Waggle
+            Fable
           </span>
         </Link>
 
@@ -432,7 +432,7 @@ export default function HomePage() {
                   href="/about"
                   className="text-sm font-bold text-slate-400 hover:text-[#8B7FDE] transition-colors underline underline-offset-4"
                 >
-                  About Lumora
+                  About Fable
                 </Link>
               </motion.div>
             </motion.div>
