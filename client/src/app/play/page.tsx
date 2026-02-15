@@ -348,26 +348,37 @@ export default function PlayPage() {
     if (activeMission) playTTS(`${activeMission.word}`);
   };
 
+  // Cleanup speech recognition on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
   const startListening = () => {
-    // Check browser support
+    // 1. Safety Check: Browser Support
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) {
-      toast.error("Your browser doesn't support voice! Try Chrome.");
+      toast.error("Voice not supported in this browser. Please use Chrome.");
       return;
     }
 
-    if (isListening) {
-      // Toggle OFF logic for push-to-talk
-      if (recognitionRef.current) recognitionRef.current.stop();
-      setIsListening(false);
-      return;
+    // 2. Cleanup: Stop any existing instance
+    if (recognitionRef.current) {
+      recognitionRef.current.abort();
+      recognitionRef.current = null;
     }
 
     setTranscript("");
     setSpeechError(null);
-    setIsListening(true); // Optimistic update
-    
-    // Play subtle "listening" sound (Synthesized Pop)
+    setIsListening(true); // Immediate feedback for UI responsiveness
+
+    // Play start sound
     const playPop = () => {
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -377,14 +388,13 @@ export default function PlayPage() {
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(800, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
         osc.start();
         osc.stop(ctx.currentTime + 0.1);
-      } catch (e) { /* ignore audio errors */ }
+      } catch (e) { /* ignore */ }
     };
     playPop();
 
@@ -394,8 +404,9 @@ export default function PlayPage() {
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
+    recognition.maxAlternatives = 5; // Increased alternatives
 
-    recognition.maxAlternatives = 3;
+    let hasResult = false;
 
     recognition.onstart = () => {
        setIsListening(true);
@@ -409,68 +420,73 @@ export default function PlayPage() {
       
       setTranscript(text);
       
-      // Check if final
       if (transcriptItem.isFinal) {
+        hasResult = true;
         setIsListening(false);
         checkResult(text);
       }
     };
 
     recognition.onerror = (event: any) => {
-      if (event.error === 'aborted') {
-        setIsListening(false);
-        return;
-      }
+      if (event.error === 'aborted') return; // Ignore intentional stops
+
       console.error("Speech Recognition Error:", event.error);
       setIsListening(false);
       
-      if (event.error === 'no-speech') {
-        setSpeechError("🎤 I didn't hear anything. Try moving closer?");
-        toast("Microphone seems quiet. Try speaking louder! 📢");
-      } else if (event.error === 'not-allowed') {
-        setSpeechError("🔒 Please allow microphone access.");
-        toast.error("Please allow microphone access in your browser settings. 🔒");
-      } else if (event.error === 'network') {
-        setSpeechError("⚠️ Network error. Check your connection.");
-      } else {
-        setSpeechError("⚠️ Oops, something went wrong. Tap to try again.");
+      // Detailed user-friendly errors
+      const errorMap: Record<string, string> = {
+        'no-speech': "🎤 I didn't hear anything. Speak a bit louder!",
+        'audio-capture': "🎤 No microphone found. Is it plugged in?",
+        'not-allowed': "🔒 Microphone blocked. Check your browser settings.",
+        'network': "📶 Network error. Please check your internet.",
+      };
+
+      setSpeechError(errorMap[event.error] || "⚠️ Oops! Let's try that again.");
+      
+      if (event.error === 'not-allowed') {
+        toast.error("Microphone access is blocked! 🔒");
       }
     };
 
     recognition.onend = () => {
-      // If we stopped listening but didn't get a result and no error, maybe it just timed out?
-      setIsListening(false);
-      recognitionRef.current = null;
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop();
+      // Only reset state if we didn't get a result (smooth transition)
+      if (!hasResult) {
+        setIsListening(false);
       }
+      recognitionRef.current = null;
     };
 
     try {
       recognition.start();
+      
+      // Parallel Media Recorder for visualizer (optional, fault-tolerant)
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        const mediaRecorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = mediaRecorder;
-        audioChunksRef.current = [];
-        mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
-        mediaRecorder.onstop = () => {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-          const audioUrl = URL.createObjectURL(audioBlob);
-          setRecordedAudioUrl(audioUrl);
-          stream.getTracks().forEach(track => track.stop());
-        };
-        mediaRecorder.start();
-      });
+        try {
+          const mediaRecorder = new MediaRecorder(stream);
+          mediaRecorderRef.current = mediaRecorder;
+          audioChunksRef.current = [];
+          mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
+          mediaRecorder.onstop = () => {
+             // Cleanup tracks to stop recording icon in tab
+             stream.getTracks().forEach(track => track.stop());
+          };
+          mediaRecorder.start();
+        } catch (e) { console.warn("MediaRecorder failed", e); }
+      }).catch(err => console.warn("Mic stream failed (visualizer only)", err));
+
     } catch (err) {
       console.error("Speech start error", err);
       setIsListening(false);
+      setSpeechError("⚠️ Could not start microphone.");
     }
   };
 
   const toggleListening = () => {
     if (isListening) {
       if (recognitionRef.current) recognitionRef.current.abort();
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
       setIsListening(false);
     } else {
       startListening();
