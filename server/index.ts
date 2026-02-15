@@ -292,23 +292,69 @@ app.post('/api/chat', async (req, res) => {
     const { text, buddy } = req.body;
     const input = text.toLowerCase();
     
-    // Simple "AI" Mentor Logic (Hackathon Fallback)
-    // In production, this would call OpenAI/Gemini
+    // Enhanced "AI" Mentor Logic (Hackathon Fallback)
     const responses: Record<string, string[]> = {
-      greeting: ["Hello my friend! I'm all ears!", "Hi there! Ready to chat?", "Hey! I love hearing your voice!"],
-      difficulty: ["I know it's tricky, but practice makes progress!", "You can do hard things! I believe in you.", "Keep going! You're getting stronger."],
-      joke: ["Why did the cookie go to the hospital? Because he felt crummy!", "What do you call a sleeping dinosaur? A dino-snore!", "Why did the banana go to the doctor? He wasn't peeling well!"],
-      tired: ["It's okay to take a break. Deep breath in... and out.", "Even superheroes need a nap! Let's rest for a second.", "You've worked so hard! Rest is important too."],
-      love: ["Aww, I love being your buddy!", "You're the best friend ever!", "High five! You're awesome!"],
-      default: ["That's so interesting! Tell me more!", "You have such a clear voice!", "I love listening to you. What else?", "Wow! You're a great storyteller."],
+      greeting: [
+        "Hello my friend! I'm all ears!", 
+        "Hi there! Ready to chat?", 
+        "Hey! I love hearing your voice!",
+        "Hi! Stick with me, we'll have fun!"
+      ],
+      difficulty: [
+        "I know it's tricky, but practice makes progress!", 
+        "You can do hard things! I believe in you.", 
+        "Keep going! You're getting stronger every time you try.",
+        "It's okay to make mistakes. That's how we learn!"
+      ],
+      tired: [
+        "It's okay to take a break. Deep breath in... and out.", 
+        "Even superheroes need a nap! Let's rest for a second.", 
+        "You've worked so hard! Rest is important too.",
+        "Let's pause. Being tired means your brain was working hard!"
+      ],
+      joke: [
+        "Why did the cookie go to the hospital? Because he felt crummy!", 
+        "What do you call a sleeping dinosaur? A dino-snore!", 
+        "Why did the banana go to the doctor? He wasn't peeling well!",
+        "What do you call a bear with no teeth? A gummy bear!"
+      ],
+      love: [
+        "Aww, I love being your buddy!", 
+        "You're the best friend ever!", 
+        "High five! You're awesome!",
+        "You make me so happy!"
+      ],
+      sad: [
+        "It's okay to feel sad sometimes. I'm here for you.",
+        "Sending you a big virtual hug!",
+        "Remember, after the rain comes the rainbow.",
+        "I'm listening. You are safe here."
+      ],
+      happy: [
+        "Yay! Your happiness makes me happy!",
+        "That's wonderful! Keep smiling!",
+        "Woohoo! Let's celebrate!",
+        "Your joy is contagious!"
+      ],
+      default: [
+        "That's so interesting! Tell me more!", 
+        "You have such a clear voice!", 
+        "I love listening to you. What else?", 
+        "Wow! You're a great storyteller.",
+        "I'm listening! Keep going!"
+      ],
     };
 
     let category = "default";
-    if (input.match(/\b(hi|hello|hey|yo)\b/)) category = "greeting";
-    else if (input.match(/\b(hard|cant|can't|tough|difficult|stuck)\b/)) category = "difficulty";
-    else if (input.match(/\b(tired|sleepy|boring|stop|break)\b/)) category = "tired";
-    else if (input.match(/\b(joke|funny|laugh)\b/)) category = "joke";
-    else if (input.match(/\b(love|like|friend|best)\b/)) category = "love";
+    const lowerText = input.toLowerCase();
+
+    if (lowerText.match(/\b(hi|hello|hey|yo|morning|afternoon)\b/)) category = "greeting";
+    else if (lowerText.match(/\b(hard|cant|can't|tough|difficult|stuck|fail|wrong)\b/)) category = "difficulty";
+    else if (lowerText.match(/\b(tired|sleepy|boring|stop|break|exhausted)\b/)) category = "tired";
+    else if (lowerText.match(/\b(joke|funny|laugh|comedy)\b/)) category = "joke";
+    else if (lowerText.match(/\b(love|like|friend|best|cool|awesome)\b/)) category = "love";
+    else if (lowerText.match(/\b(sad|cry|bad|unhappy|upset)\b/)) category = "sad";
+    else if (lowerText.match(/\b(happy|glad|good|great|exciting|fun)\b/)) category = "happy";
 
     const options = responses[category];
     const reply = options[Math.floor(Math.random() * options.length)];
