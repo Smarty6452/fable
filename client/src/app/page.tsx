@@ -9,6 +9,7 @@ import GuidedTour, { HOME_TOUR_STEPS } from "@/components/GuidedTour";
 import { NotificationBell, useNotifications } from "@/components/NotificationBell";
 import WolfieMascot from "@/components/WolfieMascot";
 import InteractiveBackground from "@/components/InteractiveBackground";
+import { stopAllTTS } from "@/lib/audio";
 
 const stagger = {
   hidden: {},
@@ -89,6 +90,7 @@ function TypeWriter({ text, delay = 0 }: { text: string; delay?: number }) {
 
 export default function HomePage() {
   const [showContent, setShowContent] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const [existingUser, setExistingUser] = useState<string | null>(null);
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
 
@@ -154,16 +156,22 @@ export default function HomePage() {
       // Play a quick confirmation and WAIT for it to finish
       await playWelcome(`Great to meet you, ${name.trim()}! Let's go!`);
       
-      // Tiny delay for smoothness after the voice ends
+      setIsNavigating(true);
       setTimeout(() => {
         window.location.href = "/play";
       }, 500);
     } else if (existingUser) {
-      window.location.href = "/play";
+      setIsNavigating(true);
+      // Brief delay for the loader to feel natural
+      setTimeout(() => {
+        window.location.href = "/play";
+      }, 300);
     }
   };
 
   const resetUser = () => {
+    stopAllTTS(); // Stop any greeting immediately
+
     toast("Switch explorer name?", {
       description: "Your current progress will be safe for that name!",
       action: {
@@ -184,7 +192,11 @@ export default function HomePage() {
 
   // Trigger welcome on first interaction to bypass browser autoplay policy
   useEffect(() => {
-    const handleFirstClick = () => {
+    const handleFirstClick = (e: MouseEvent) => {
+      // Don't play welcome if clicking a button (like Switch User)
+      const target = e.target as HTMLElement;
+      if (target.closest('button') || target.closest('a')) return;
+
       playWelcome();
       window.removeEventListener("click", handleFirstClick);
     };
@@ -570,6 +582,40 @@ export default function HomePage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Page Transition Loader */}
+      <AnimatePresence mode="wait">
+        {isNavigating && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center"
+          >
+            <div className="relative mb-8">
+              <WolfieMascot size={200} />
+              <motion.div
+                className="absolute inset-x-0 -bottom-4 flex justify-center gap-1"
+                animate={{ opacity: [0.4, 1, 0.4] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="w-2 h-2 bg-primary rounded-full" />
+                ))}
+              </motion.div>
+            </div>
+            
+            <motion.h2
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-3xl font-black text-slate-800 tracking-tight"
+            >
+              Loading Adventure...
+            </motion.h2>
+            <p className="text-slate-500 font-bold mt-2">Getting the sound missions ready for you!</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

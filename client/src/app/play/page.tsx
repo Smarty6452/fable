@@ -13,6 +13,7 @@ import BuddySelector, { BUDDIES } from "@/components/BuddySelector";
 import BuddyMascot from "@/components/BuddyMascot";
 import InteractiveBackground from "@/components/InteractiveBackground";
 import GuidedTour, { PLAY_TOUR_STEPS } from "@/components/GuidedTour";
+import WolfieMascot from "@/components/WolfieMascot";
 import { NotificationBell, useNotifications, triggerLevelUpNotification, triggerStreakNotification } from "@/components/NotificationBell";
 import { preloadTTS, playCachedTTS, stopAllTTS } from "@/lib/audio";
 import { CHAPTERS, getUnlockedChapters, getCurrentChapter } from "@/data/chapters";
@@ -43,7 +44,8 @@ export default function PlayPage() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification } = useNotifications();
 
   // Core Game State
-  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "success">("onboarding");
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "ending">("onboarding");
   const [selectedBuddy, setSelectedBuddy] = useState(BUDDIES[0]);
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
   
@@ -364,9 +366,13 @@ export default function PlayPage() {
       action: {
         label: "Switch",
         onClick: () => {
+          stopAllTTS(); // Stop any speech
           localStorage.removeItem("kidName");
           localStorage.removeItem("selectedBuddy");
-          window.location.href = "/";
+          setIsNavigating(true);
+          setTimeout(() => {
+            window.location.href = "/";
+          }, 500);
         }
       },
       cancel: {
@@ -1181,6 +1187,38 @@ export default function PlayPage() {
                   GOT IT, RELOAD!
                 </button>
              </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Page Transition Loader */}
+      <AnimatePresence>
+        {isNavigating && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center"
+          >
+            <div className="relative mb-8">
+              <WolfieMascot size={200} />
+              <motion.div
+                className="absolute inset-x-0 -bottom-4 flex justify-center gap-1"
+                animate={{ opacity: [0.4, 1, 0.4] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+              >
+                {[0, 1, 2].map(i => (
+                  <div key={i} className="w-2 h-2 bg-primary rounded-full" />
+                ))}
+              </motion.div>
+            </div>
+            
+            <motion.h2
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="text-3xl font-black text-slate-800 tracking-tight"
+            >
+              Coming Home...
+            </motion.h2>
           </motion.div>
         )}
       </AnimatePresence>
