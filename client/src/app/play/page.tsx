@@ -162,21 +162,20 @@ export default function PlayPage() {
     };
   }, []);
 
-  // Preload Buddy Voices (Winning Strategy) - Staggered to avoid 429 rate limits
+  // Preload Buddy Voices (Realistic strategy) - Staggered to avoid limits
   useEffect(() => {
     const intros = [
-      { id: "wolf", text: "Hi! I'm Wolfie. Ready to howl with some sounds?" },
-      { id: "robot", text: "Hello. I am Bolt. Let us process some practice words together." },
-      { id: "cat", text: "Meow! I'm Luna. I love hearing you speak!" },
-      { id: "puppy", text: "Woof! I'm Max. Let's play and talk!" },
-      { id: "panda", text: "Hi there, I'm Mochi. Let's take it slow and steady." }
+      { id: "wolf", text: "Hi! I'm Wolfie. Ready to howl with some sounds?", voice: "amx" },
+      { id: "robot", text: "Hello. I am Bolt. Let us process some practice words together.", voice: "onyx" },
+      { id: "cat", text: "Meow! I'm Luna. I love hearing you speak!", voice: "sarah" },
+      { id: "puppy", text: "Woof! I'm Max. Let's play and talk!", voice: "amx" },
+      { id: "panda", text: "Hi there, I'm Mochi. Let's take it slow and steady.", voice: "nyah" }
     ];
     
-    // Stagger preloads by 1 second each to be gentle on the API
     intros.forEach((buddy, index) => {
       setTimeout(() => {
-        preloadTTS(buddy.text, buddy.id === 'wolf' ? 'C' : buddy.id === 'robot' ? 'A' : 'D');
-      }, index * 1000);
+        preloadTTS(buddy.text, buddy.voice);
+      }, index * 800);
     });
   }, []);
 
@@ -438,28 +437,14 @@ export default function PlayPage() {
   };
 
   const getVoiceForBuddy = (buddyId: string) => {
-    if (availableVoices.length > 0) {
-      const findVoice = (nameParts: string[]) => {
-        return availableVoices.find(v => 
-          nameParts.some(part => v.voiceId.toLowerCase().includes(part) || v.displayName.toLowerCase().includes(part))
-        )?.voiceId;
-      };
-      switch (buddyId) {
-        case "cat": return findVoice(["emily", "sarah", "female"]) || availableVoices[0].voiceId;
-        case "panda": return findVoice(["roma", "nyah", "female"]) || availableVoices[0].voiceId;
-        case "wolf": return findVoice(["nyah", "emily", "female"]) || availableVoices[0].voiceId;
-        case "robot": return findVoice(["james", "onyx", "male", "robot"]) || availableVoices[0].voiceId;
-        case "puppy": return findVoice(["amx", "james", "male", "fun"]) || availableVoices[0].voiceId;
-        default: return availableVoices[0].voiceId;
-      }
-    }
+    // These IDs match high-quality Smallest AI voices for realism
     switch (buddyId) {
-      case "cat": return "sarah";   
-      case "panda": return "nyah"; 
-      case "wolf": return "lauren";  
-      case "robot": return "onyx"; 
-      case "puppy": return "amx";
-      default: return "lauren";
+      case "cat": return "sarah";   // Soft female
+      case "panda": return "nyah";  // Soothing female
+      case "wolf": return "amx";    // Friendly male
+      case "robot": return "onyx";  // Deep male
+      case "puppy": return "amx";   // Playful male
+      default: return "lauren";     // Professional high-quality female fallback
     }
   };
 

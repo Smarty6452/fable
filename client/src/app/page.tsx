@@ -104,14 +104,26 @@ export default function HomePage() {
       const { playCachedTTS } = await import("@/lib/audio");
       const currentName = localStorage.getItem("kidName") || name;
       const message = forceMessage || (currentName 
-        ? `Welcome back, ${currentName}! Your buddy Wolfie is so happy to see you again! Click the button to continue our adventure!`
+        ? `Welcome back, ${currentName}! your buddy Wolfie is so happy to see you again! Click the button to continue our adventure!`
         : "Hi there! Welcome to Fable! I'm Wolfie, your new speech therapy buddy! I'm so excited to help you learn and play! Type your name below so we can start!");
       
-      playCachedTTS(message, "C"); // Using voice 'C' (Wolfie/Male)
+      // Use 'amx' for Wolfie (Warm Male Voice) for realism
+      playCachedTTS(message, "amx"); 
     } catch (e) {
       console.error("Welcome voice failed", e);
     }
   };
+
+  // Preload welcome message for instant playback on click
+  useEffect(() => {
+    const currentName = localStorage.getItem("kidName");
+    if (currentName) {
+      import("@/lib/audio").then(({ preloadTTS }) => {
+        const message = `Welcome back, ${currentName}! your buddy Wolfie is so happy to see you again! Click the button to continue our adventure!`;
+        preloadTTS(message, "amx");
+      });
+    }
+  }, []);
 
   const handleStart = () => {
     if (!existingUser && name.trim()) {
