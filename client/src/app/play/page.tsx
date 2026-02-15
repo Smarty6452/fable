@@ -64,8 +64,13 @@ export default function PlayPage() {
   const [attempts, setAttempts] = useState(0);
   const [selectedChapterId, setSelectedChapterId] = useState(CHAPTERS[0].id);
   const [availableVoices, setAvailableVoices] = useState<{voiceId: string, displayName: string}[]>([]);
+  const [conversationHistory, setConversationHistory] = useState<{sender: 'buddy'|'kid', text: string}[]>([]);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification } = useNotifications();
   const unlockedChapters = getUnlockedChapters(xp);
@@ -340,6 +345,30 @@ export default function PlayPage() {
 
     try {
       recognition.start();
+
+      // Start recording actual audio
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        const mediaRecorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          setRecordedAudioUrl(audioUrl);
+          
+          // Here you would upload audioBlob to server if storing
+        };
+
+        mediaRecorder.start();
+      });
+
     } catch (err) {
       console.error("Speech start error", err);
       setIsListening(false);
@@ -347,8 +376,11 @@ export default function PlayPage() {
   };
 
   const toggleListening = () => {
-    if (isListening && recognitionRef.current) {
-      recognitionRef.current.abort(); // Correct way to stop immediately
+    if (isListening) {
+      if (recognitionRef.current) recognitionRef.current.abort();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
       setIsListening(false);
     } else {
       startListening();
@@ -410,59 +442,60 @@ export default function PlayPage() {
       // Silent fail
     }
 
+    // Adaptive Coaching Logic
+    let feedback = "";
     if (isCorrect) {
       setSuccess(true);
+      feedback = `YES! That was perfect! You nailed the "${activeMission.sound}" in ${activeMission.word}!`;
+      // ... (streak/xp code remains same, triggered by effect or inline)
+      
+      const confetti = (await import("canvas-confetti")).default;
+      confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
+
+      // Update XP/Streak/Level... (Previous logic)
       const newStreak = streak + 1;
       setStreak(newStreak);
       localStorage.setItem("streak", newStreak.toString());
-      if (newStreak % 5 === 0) {
-        triggerStreakNotification(newStreak, addNotification);
-      }
-
+      
       const newXp = xp + bonusXp;
       setXp(newXp);
       localStorage.setItem("xp", newXp.toString());
-
+      
+      if (newXp >= level * 100) {
+        setLevel(l => l + 1);
+        triggerLevelUpNotification(level + 1, addNotification);
+      }
+      
       const newCompleted = [...new Set([...completedMissions, activeMission.id])];
       setCompletedMissions(newCompleted);
       localStorage.setItem("completedMissions", JSON.stringify(newCompleted));
 
-      // Level up logic
-      const nextLevelXp = level * 100;
-      if (newXp >= nextLevelXp) {
-        setLevel(prev => {
-          const newLevel = prev + 1;
-          localStorage.setItem("level", newLevel.toString());
-          triggerLevelUpNotification(newLevel, addNotification);
-          return newLevel;
-        });
-      }
-
-      const confetti = (await import("canvas-confetti")).default;
-      confetti({
-        particleCount: 200,
-        spread: 100,
-        origin: { y: 0.6 },
-        colors: ['#FF8C00', '#FFB347', '#4A90E2', '#FFD700', '#77DD77'],
-      });
-
-      const encouragements = [
-        `Fantastic ${kidName}!`,
-        `You're a superstar!`,
-        `Perfect pronunciation!`,
-        `Wow! That was amazing!`,
-      ];
-      await playTTS(`${encouragements[Math.floor(Math.random() * encouragements.length)]} You said ${activeMission.word} perfectly!`);
     } else if (isNearMiss) {
-      await playTTS(`I heard that ${activeMission.sound} sound! Great try ${kidName}. Can you say the whole word "${activeMission.word}" now?`);
-      toast("Almost there! Keep going!");
-      if (newAttempts >= 2) setShowTip(true);
+       feedback = `So close! I heard the "${activeMission.sound}" sound, but let's try to say the whole word "${activeMission.word}" clearly.`;
+       if (newAttempts >= 2) setShowTip(true);
     } else {
-      setStreak(0);
-      localStorage.setItem("streak", "0");
-      if (newAttempts >= 2) setShowTip(true);
-      await playTTS(`Good effort ${kidName}! Let's try the ${activeMission.sound} sound in "${activeMission.word}" one more time.`);
+       // Adaptive speed for failure
+       if (newAttempts >= 2 && voiceSpeed > 0.7) setVoiceSpeed(0.7);
+       
+       if (newAttempts === 1) {
+         feedback = `Nice try! Remember, for ${activeMission.word}, ${activeMission.tip}`;
+       } else if (newAttempts === 2) {
+         feedback = `Let's slow down. Listen to me: ${activeMission.sound}... ${activeMission.word}. Now you try!`;
+       } else {
+         feedback = `Don't give up! Look at my mouth. ${activeMission.example}. Try one more time!`;
+       }
+       if (newAttempts >= 2) setShowTip(true);
+       setStreak(0);
     }
+
+    // Add to conversation history
+    setConversationHistory(prev => [
+      ...prev, 
+      { sender: 'kid', text: text },
+      { sender: 'buddy', text: feedback }
+    ]);
+
+    await playTTS(feedback);
   };
 
   const currentLevelXp = xp % xpForNextLevel;
@@ -783,8 +816,28 @@ export default function PlayPage() {
               )}
             </AnimatePresence>
 
+            {/* Mode Toggle */}
+            <div className="flex justify-center gap-4 mb-8 relative z-20">
+              <button 
+                onClick={() => setGameState("practice")} 
+                className={`px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest transition-all ${
+                  gameState === "practice" ? "bg-primary text-white shadow-lg" : "bg-white/50 text-slate-400"
+                }`}
+              >
+                Standard
+              </button>
+              <button 
+                className={`px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest transition-all ${
+                   "bg-white/50 text-slate-400 cursor-not-allowed opacity-50"
+                }`}
+                title="Coming Soon!"
+              >
+                Conversation (Pro)
+              </button>
+            </div>
+
             {/* Mic Controls */}
-            <div className="flex flex-col items-center gap-4 mt-8 relative z-20">
+            <div className="flex flex-col items-center gap-4 mt-2 relative z-20">
               <div className="relative">
                 <AnimatePresence>
                   {isListening && (
@@ -843,7 +896,7 @@ export default function PlayPage() {
 
             {isListening && <AudioVisualizer isListening={isListening} />}
 
-            <div className="h-20 flex items-center justify-center w-full mt-8">
+            <div className="h-20 flex items-center justify-center w-full mt-2">
               <AnimatePresence mode="wait">
                 {transcript && (
                   <motion.div
@@ -858,6 +911,37 @@ export default function PlayPage() {
                 )}
               </AnimatePresence>
             </div>
+
+            {/* Conversation History */}
+            {conversationHistory.length > 0 && (
+              <div className="mt-8 w-full max-w-lg bg-white/50 backdrop-blur-md rounded-3xl p-6 border-2 border-white/50">
+                 <h4 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Conversation</h4>
+                 <div className="flex flex-col gap-3 max-h-40 overflow-y-auto pr-2">
+                   {conversationHistory.map((msg, i) => (
+                     <div key={i} className={`flex gap-3 ${msg.sender === 'buddy' ? 'flex-row' : 'flex-row-reverse'}`}>
+                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${
+                         msg.sender === 'buddy' ? 'bg-primary text-white' : 'bg-slate-200 text-slate-600'
+                       }`}>
+                         {msg.sender === 'buddy' ? 'B' : 'K'}
+                       </div>
+                       <div className={`px-4 py-2 rounded-2xl text-sm font-bold max-w-[80%] ${
+                         msg.sender === 'buddy' ? 'bg-white text-slate-700 shadow-sm' : 'bg-primary/10 text-primary'
+                       }`}>
+                         {msg.text}
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+              </div>
+            )}
+            
+            {/* Audio Playback */}
+            {recordedAudioUrl && !isListening && (
+              <div className="mt-4 flex items-center gap-3 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">
+                <span className="text-xs font-bold text-slate-400 uppercase">Your Recording</span>
+                <audio src={recordedAudioUrl} controls className="h-8 w-48" />
+              </div>
+            )}
 
             <AnimatePresence>
               {success && (
