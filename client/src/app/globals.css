@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --color-primary: #FFB347;
+  --color-secondary: #B19CD9;
+  --color-accent: #77DD77;
+  --color-background: #FFF9F2;
+  --color-soft-blue: #AEC6CF;
+  --color-soft-pink: #FFD1DC;
+}
+
+:root {
+  --background: #FFF9F2;
+  --foreground: #4A4A4A;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+}
+
+.child-card {
+  @apply rounded-[2rem] bg-white border-4 border-primary/20 shadow-xl transition-all duration-300;
+}
+
+.child-card:hover {
+  @apply transform -translate-y-2 border-primary/40 shadow-2xl;
+}
+
+.btn-child {
+  @apply rounded-full px-8 py-4 font-bold text-xl shadow-lg transition-all active:scale-95;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
