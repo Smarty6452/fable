@@ -122,7 +122,7 @@ export default function HomePage() {
             <Volume2 size={22} />
           </motion.div>
           <span className="text-xl font-black text-slate-800 tracking-tight group-hover:text-[#8B7FDE] transition-colors">
-            Lumora
+            Waggle
           </span>
         </Link>
 
