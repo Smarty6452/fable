@@ -109,6 +109,19 @@ export default function HomePage() {
     return () => clearTimeout(t);
   }, [router]);
 
+  // Auto-Welcome on Land
+  useEffect(() => {
+    const hasPlayed = sessionStorage.getItem("welcomePlayed");
+    if (!hasPlayed) {
+      // Small delay to let page load
+      const timer = setTimeout(() => {
+        playWelcome("Hi there! I'm Fable. What's your name?");
+        sessionStorage.setItem("welcomePlayed", "true");
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   const [name, setName] = useState("");
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
