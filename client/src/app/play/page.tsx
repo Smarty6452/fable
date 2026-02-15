@@ -425,17 +425,21 @@ export default function PlayPage() {
   const checkResult = async (text: string) => {
     if (!activeMission) return;
 
-    const lowerText = text.toLowerCase();
-    const targetWord = activeMission.word.toLowerCase();
-    const targetSound = activeMission.sound.toLowerCase();
+    const normalizedText = text.toLowerCase().replace(/[.,!?;:]/g, "").trim();
+    const targetWord = activeMission.word.toLowerCase().trim();
+    const targetSound = activeMission.sound.toLowerCase().trim();
     
+    console.log(`🎙️ Hearing: "${normalizedText}" | Target: "${targetWord}"`);
+
     // Improved matching logic (fuzzy match for similar sounds)
-    const isCorrect = lowerText.includes(targetWord) || 
-                     (targetWord === "cake" && (lowerText.includes("kake") || lowerText.includes("take")));
+    const isCorrect = normalizedText.includes(targetWord) || 
+                     (targetWord === "cake" && (normalizedText.includes("kake") || normalizedText.includes("take"))) ||
+                     (targetWord === "sun" && normalizedText.includes("son")) || // Common homophones
+                     normalizedText === targetWord;
     
-    const containsSound = lowerText.includes(targetSound) || 
-                         (targetSound === "c" && lowerText.includes("k")) ||
-                         (targetSound === "s" && lowerText.includes("ss"));
+    const containsSound = normalizedText.includes(targetSound) || 
+                         (targetSound === "c" && normalizedText.includes("k")) ||
+                         (targetSound === "s" && normalizedText.includes("ss"));
     
     const isNearMiss = !isCorrect && containsSound;
     const newAttempts = attempts + 1;
