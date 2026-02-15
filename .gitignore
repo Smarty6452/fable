@@ -38,3 +38,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Hackathon / Private Docs
+HACKATHON_WINNING_PLAN.md
+RENDER_DEPLOYMENT.md
+FUTURE_ROADMAP.md
+*.pptx
+*.pdf
+presentation/
+temp/

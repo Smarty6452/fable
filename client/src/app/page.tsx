@@ -148,7 +148,7 @@ export default function HomePage() {
 
       <GuidedTour
         steps={HOME_TOUR_STEPS}
-        onComplete={() => console.log("Home tour complete")}
+        onComplete={() => {}}
         storageKey="home-tour-v1"
       />
 

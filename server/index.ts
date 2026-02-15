@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import axios from 'axios';
 import path from 'path';
 import { AtomsClient, Configuration as SmallestConfig } from 'smallestai';
+import { rateLimit } from 'express-rate-limit';
 
 // Robust env loading - try multiple paths for monorepo compatibility
 const envPaths = [
@@ -27,6 +28,20 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many requests from this IP, please try again after 15 minutes',
+});
+
+// Apply to tts and sessions specifically to prevent abuse
+app.use('/api/tts', limiter);
+app.use('/api/sessions', limiter);
+app.use('/api/atoms', limiter);
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -52,11 +67,23 @@ const SessionSchema = new mongoose.Schema({
 });
 const Session = mongoose.model('Session', SessionSchema);
 
+// Voice Cache to reduce latency
+let voiceCache: any = null;
+let lastCacheUpdate = 0;
+const CACHE_TTL = 3600000; // 1 hour
+
 // Fetch available voices from Smallest AI
 app.get('/api/voices', async (req, res) => {
   const apiKey = process.env.SMALLEST_AI_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'API key not configured' });
+  }
+
+  // Check cache first
+  const now = Date.now();
+  if (voiceCache && (now - lastCacheUpdate < CACHE_TTL)) {
+    // console.log('🚀 Serving voices from server cache');
+    return res.json(voiceCache);
   }
 
   try {
@@ -67,10 +94,22 @@ app.get('/api/voices', async (req, res) => {
       headers: { 'Authorization': `Bearer ${apiKey}` },
       timeout: 10000,
     });
+    
+    // Update cache
+    voiceCache = response.data;
+    lastCacheUpdate = now;
+    
     res.json(response.data);
   } catch (error: any) {
     console.error('❌ Voices fetch error:', error.response?.status, error.message);
-    // Return known working voices as fallback
+    
+    // If we have a cache (even if expired), return it as fallback during API failure
+    if (voiceCache) {
+      console.warn('⚠️ API failed, serving stale cache');
+      return res.json(voiceCache);
+    }
+
+    // Hardcoded fallback if no cache exists
     res.json({
       voices: [
         { voiceId: 'lauren', displayName: 'Lauren (Best for Kids)' },
@@ -105,7 +144,7 @@ app.post('/api/tts', async (req, res) => {
   }
 
   const requestSpeech = async (targetVoice: string) => {
-    console.log(`🎙️ TTS: model=lightning-v3.1 | voice=${targetVoice} | text="${text.substring(0, 30)}..."`);
+    // console.log(`🎙️ TTS: model=lightning-v3.1 | voice=${targetVoice} | text="${text.substring(0, 30)}..."`);
     // Using lightning-v3.1 for better quality and compatibility with voices like lauren
     return await axios({
       method: 'post',
@@ -266,7 +305,7 @@ async function getOrCreateTherapyAgent(): Promise<string> {
   try {
     const agents = await client.getAgents();
     const existing = (agents.data as any)?.find?.((a: any) =>
-      a.name === 'Waggle Progress Reporter' || a.name === 'TalkyBuddy Progress Reporter'
+      a.name === 'TalkyBuddy Progress Reporter'
     );
     if (existing) {
       cachedAgentId = existing.id || existing._id;
@@ -276,7 +315,7 @@ async function getOrCreateTherapyAgent(): Promise<string> {
   } catch (_) { /* proceed to create */ }
 
   const response = await client.createAgent({
-    name: 'Waggle Progress Reporter',
+    name: 'TalkyBuddy Progress Reporter',
     description: 'AI speech therapy assistant that calls parents with progress updates on their child\'s pronunciation practice. Be warm, encouraging, and specific about which sounds the child is improving on.',
     language: {
       enabled: 'en' as any,
@@ -380,7 +419,7 @@ app.get('/api/atoms/call-status/:conversationId', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    message: 'Waggle Server Running',
+    message: 'TalkyBuddy Server Running',
     ttsConfigured: !!process.env.SMALLEST_AI_API_KEY,
     atomsEnabled: true,
     dbConnected: mongoose.connection.readyState === 1,

@@ -8,7 +8,7 @@ interface BuddyMascotProps {
   isListening: boolean;
   isSynthesizing: boolean;
   size?: number;
-  mood?: "happy" | "sad" | "surprised";
+  mood?: "happy" | "sad" | "surprised" | "celebrating";
 }
 
 export default function BuddyMascot({ 
@@ -174,10 +174,19 @@ export default function BuddyMascot({
     <motion.div 
       className="relative select-none"
       style={{ width: size, height: size }}
-      animate={isSynthesizing ? { scale: [1, 1.05, 1], y: [0, -5, 0] } : { y: [0, -10, 0] }}
-      transition={isSynthesizing 
-        ? { duration: 0.4, repeat: Infinity } 
-        : { duration: 3, repeat: Infinity, ease: "easeInOut" }
+      animate={
+        mood === "celebrating" 
+          ? { y: [0, -40, 0, -30, 0], rotate: [0, 10, -10, 10, 0], scale: [1, 1.1, 1, 1.05, 1] }
+          : isSynthesizing 
+            ? { scale: [1, 1.05, 1], y: [0, -5, 0] } 
+            : { y: [0, -10, 0] }
+      }
+      transition={
+        mood === "celebrating"
+          ? { duration: 0.8, repeat: 3 }
+          : isSynthesizing 
+            ? { duration: 0.4, repeat: Infinity } 
+            : { duration: 3, repeat: Infinity, ease: "easeInOut" }
       }
     >
       <svg viewBox="0 0 280 280" className="w-full h-full drop-shadow-2xl overflow-visible">

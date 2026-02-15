@@ -76,6 +76,8 @@ TalkyBuddy Boost transforms speech therapy into an AI-powered adventure game wit
 - **Staggered blur-to-focus** entrance animations
 - **Cursor glow** - soft gradient light follows mouse
 - **Confetti celebrations** on successful pronunciation
+- **Smart Level-Up** - Exponential XP scaling with celebrating buddy animations
+- **Production Edge** - Global rate limiting and multi-layer caching
 
 ---
 

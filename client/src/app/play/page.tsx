@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,27 +16,20 @@ import GuidedTour, { PLAY_TOUR_STEPS } from "@/components/GuidedTour";
 import { NotificationBell, useNotifications, triggerLevelUpNotification, triggerStreakNotification } from "@/components/NotificationBell";
 import { preloadTTS, playCachedTTS } from "@/lib/audio";
 import { CHAPTERS, getUnlockedChapters, getCurrentChapter } from "@/data/chapters";
+import { MISSIONS, type Mission } from "@/data/missions";
+import { 
+  XP_PER_WORD, 
+  PERFECT_ROUND_BONUS, 
+  getLevelFromXp, 
+  getXpProgressInLevel, 
+  calculateStars, 
+  getRandomSuccessMessage, 
+  getRandomRetryMessage,
+  getRandomLevelUpMessage 
+} from "@/lib/progression";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
-interface Mission {
-  id: string;
-  word: string;
-  sound: string;
-  difficulty: "easy" | "medium" | "hard";
-  xp: number;
-  tip: string;
-  example: string;
-}
-
-interface UserStats {
-  xp: number;
-  level: number;
-  streak: number;
-  completedMissions: string[];
-}
-
-const DIFFICULTY_XP = { easy: 10, medium: 20, hard: 30 };
 
 export default function PlayPage() {
 
@@ -45,6 +38,9 @@ export default function PlayPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Hooks
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification } = useNotifications();
 
   // Core Game State
   const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "success">("select");
@@ -70,20 +66,24 @@ export default function PlayPage() {
   // UI State
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
   const [availableVoices, setAvailableVoices] = useState<any[]>([]);
-  const [mood, setMood] = useState<"happy" | "sad" | "surprised">("happy");
+  const [mood, setMood] = useState<"happy" | "sad" | "surprised" | "celebrating">("happy");
   const [success, setSuccess] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const [showTip, setShowTip] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<{sender: 'buddy' | 'kid', text: string}[]>([]);
 
   const [selectedChapterId, setSelectedChapterId] = useState(CHAPTERS[0].id);
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
+  const [stars, setStars] = useState(0);
 
-  // Derived State
-  const xpForNextLevel = level * 100;
+  const [hasMounted, setHasMounted] = useState(false);
+  const xpInfo = useMemo(() => getXpProgressInLevel(xp), [xp]);
   const unlockedChapters = useMemo(() => getUnlockedChapters(xp), [xp]);
 
   // Load Saved Progress
   useEffect(() => {
+    setHasMounted(true);
     const savedName = localStorage.getItem("kidName");
     const savedBuddy = localStorage.getItem("selectedBuddy");
     const savedXp = localStorage.getItem("xp");
@@ -94,8 +94,12 @@ export default function PlayPage() {
     if (savedName) {
       setKidName(savedName);
       if (savedBuddy) {
-        const buddy = BUDDIES.find(b => b.id === savedBuddy) || JSON.parse(savedBuddy);
-        setSelectedBuddy(buddy);
+        try {
+          const buddy = BUDDIES.find(b => b.id === savedBuddy) || JSON.parse(savedBuddy);
+          setSelectedBuddy(buddy);
+        } catch (e) {
+          setSelectedBuddy(BUDDIES[0]);
+        }
       }
       if (savedXp) setXp(parseInt(savedXp));
       if (savedLevel) setLevel(parseInt(savedLevel));
@@ -103,16 +107,16 @@ export default function PlayPage() {
       if (savedMissions) setCompletedMissions(JSON.parse(savedMissions));
       
       setGameState("select");
-      if (savedLevel) setLevel(parseInt(savedLevel));
-      // Reset streak and completion if it's a new day? No, keep it persistent.
 
       // Add welcome notification if none exist
-      if (localStorage.getItem("talkybuddy-notifications") === null) {
+      const welcomeKey = "talkybuddy-welcome-notified";
+      if (!localStorage.getItem(welcomeKey)) {
         addNotification({
           type: "reward",
-          title: "Welcome to Fable! 🎁",
-          message: "We're so glad you're here! Start a mission to earn your first XP points!",
+          title: "Welcome back! 🎁",
+          message: "Ready for another adventure? Let's practice some sounds!",
         });
+        localStorage.setItem(welcomeKey, "true");
       }
     }
   }, [addNotification]);
@@ -136,7 +140,7 @@ export default function PlayPage() {
           const data = await res.json();
           if (data.voices) {
             setAvailableVoices(prev => [...prev, ...data.voices]);
-            console.log("✅ Available Smallest AI voices:", data.voices);
+            // console.log("✅ Available Smallest AI voices:", data.voices);
           }
         }
       } catch (err) {
@@ -144,6 +148,36 @@ export default function PlayPage() {
       }
     };
     fetchSmallestVoices();
+  }, []);
+
+  // Offline Detection
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // Preload Buddy Voices (Winning Strategy) - Staggered to avoid 429 rate limits
+  useEffect(() => {
+    const intros = [
+      { id: "wolf", text: "Hi! I'm Wolfie. Ready to howl with some sounds?" },
+      { id: "robot", text: "Hello. I am Bolt. Let us process some practice words together." },
+      { id: "cat", text: "Meow! I'm Luna. I love hearing you speak!" },
+      { id: "puppy", text: "Woof! I'm Max. Let's play and talk!" },
+      { id: "panda", text: "Hi there, I'm Mochi. Let's take it slow and steady." }
+    ];
+    
+    // Stagger preloads by 1 second each to be gentle on the API
+    intros.forEach((buddy, index) => {
+      setTimeout(() => {
+        preloadTTS(buddy.text, buddy.id === 'wolf' ? 'C' : buddy.id === 'robot' ? 'A' : 'D');
+      }, index * 1000);
+    });
   }, []);
 
   // Helper to stop all playing audio (TTS + Browser Speech)
@@ -241,13 +275,13 @@ export default function PlayPage() {
       setIsListening(false);
       
       const errorMap: Record<string, string> = {
-        'no-speech': "🎤 I didn't hear anything. Speak a bit louder!",
-        'audio-capture': "🎤 No microphone found. Is it plugged in?",
-        'not-allowed': "🔒 Microphone blocked. Check your browser settings.",
-        'network': "📶 Network error. Please check your internet.",
+        'no-speech': "ðŸŽ¤ I didn't hear anything. Speak a bit louder!",
+        'audio-capture': "ðŸŽ¤ No microphone found. Is it plugged in?",
+        'not-allowed': "ðŸ”’ Microphone blocked. Check your browser settings.",
+        'network': "ðŸ“¶ Network error. Please check your internet.",
       };
-      setSpeechError(errorMap[event.error] || "⚠️ Oops! Let's try that again.");
-      if (event.error === 'not-allowed') toast.error("Microphone access is blocked! 🔒");
+      setSpeechError(errorMap[event.error] || "âš ï¸ Oops! Let's try that again.");
+      if (event.error === 'not-allowed') toast.error("Microphone access is blocked! ðŸ”’");
     };
 
     recognition.onend = () => {
@@ -278,54 +312,12 @@ export default function PlayPage() {
     } catch (err) {
       console.error("Speech start error", err);
       setIsListening(false);
-      setSpeechError("⚠️ Could not start microphone.");
+      setSpeechError("âš ï¸ Could not start microphone.");
     }
   };
 
-interface Mission {
-  id: string;
-  word: string;
-  sound: string;
-  emoji: string;
-  difficulty: "easy" | "medium" | "hard";
-  tip: string;
-  example: string;
-}
-
-const MISSIONS: Mission[] = [
-  // Chapter 1: Sound Explorer (Easy basics)
-  { id: "1", word: "Sun", sound: "S", emoji: "☀️", difficulty: "easy", tip: "Put your tongue behind your top teeth and blow air softly!", example: "Ssssun - like a snake hissing!" },
-  { id: "2", word: "Cake", sound: "C", emoji: "🍰", difficulty: "easy", tip: "Touch the back of your tongue to the roof of your mouth!", example: "K-k-cake - like a clock ticking!" },
-  { id: "6", word: "Apple", sound: "P", emoji: "🍎", difficulty: "easy", tip: "Press your lips together, then pop them open!", example: "A-ppp-le - pop those lips!" },
-  { id: "8", word: "Fish", sound: "F", emoji: "🐟", difficulty: "easy", tip: "Gently bite your bottom lip and blow air!", example: "Fff-ish - lip under teeth, blow!" },
-  // Chapter 2: Brave Voyager (Medium sounds)
-  { id: "3", word: "Lion", sound: "L", emoji: "🦁", difficulty: "medium", tip: "Press your tongue tip right behind your top front teeth!", example: "Lll-ion - let your tongue tap up!" },
-  { id: "4", word: "Robot", sound: "R", emoji: "🤖", difficulty: "medium", tip: "Curl your tongue back slightly without touching anything!", example: "Rrr-obot - like a quiet growl!" },
-  { id: "5", word: "Water", sound: "W", emoji: "💧", difficulty: "medium", tip: "Round your lips like you're about to blow a candle!", example: "Www-ater - round lips, then open!" },
-  // Chapter 3: Sound Master (Hard sounds)
-  { id: "7", word: "Thunder", sound: "TH", emoji: "⚡", difficulty: "hard", tip: "Put your tongue between your teeth just a little bit!", example: "Th-th-thunder - tongue peeks out!" },
-  { id: "9", word: "Zebra", sound: "Z", emoji: "🦓", difficulty: "medium", tip: "Make a bee sound! Zzzzz!", example: "Zzz-ebra - feel the buzz in your teeth!" },
-  { id: "12", word: "Shark", sound: "SH", emoji: "🦈", difficulty: "medium", tip: "Round your lips and say 'shhh'!", example: "Shhh-ark - like telling someone to be quiet!" },
-  // Chapter 4: Combo Champion (Blends & combos)
-  { id: "13", word: "Star", sound: "ST", emoji: "⭐", difficulty: "medium", tip: "Start with S then quickly add T - Sss-tar!", example: "St-st-star - snake hiss then tongue tap!" },
-  { id: "14", word: "Frog", sound: "FR", emoji: "🐸", difficulty: "medium", tip: "Bite your lip for F then growl the R!", example: "Fff-rrr-og - lip bite then growl!" },
-  { id: "15", word: "Snail", sound: "SN", emoji: "🐌", difficulty: "medium", tip: "Hiss the S then hum the N through your nose!", example: "Sss-nnn-ail - hiss then hum!" },
-  { id: "16", word: "Clap", sound: "CL", emoji: "👏", difficulty: "hard", tip: "Quick K sound then tongue up for L!", example: "Cl-cl-clap - back tongue then front!" },
-  // Chapter 5: Word Wizard (Multi-syllable)
-  { id: "17", word: "Butterfly", sound: "B", emoji: "🦋", difficulty: "medium", tip: "Pop your lips for B, then let the word flow!", example: "But-ter-fly - three beats!" },
-  { id: "18", word: "Dinosaur", sound: "D", emoji: "🦕", difficulty: "medium", tip: "Tap your tongue behind your top teeth for D!", example: "Di-no-saur - tongue tap then roar!" },
-  { id: "19", word: "Elephant", sound: "L", emoji: "🐘", difficulty: "hard", tip: "E-le-phant has three parts - focus on the L in the middle!", example: "El-e-phant - tongue up for that L!" },
-  { id: "20", word: "Helicopter", sound: "H", emoji: "🚁", difficulty: "hard", tip: "Breathe out softly for H, then say each part!", example: "Hel-i-cop-ter - four beats, blow air first!" },
-  // Chapter 6: Sentence Sage (Short phrases)
-  { id: "10", word: "Monkey", sound: "M", emoji: "🐒", difficulty: "easy", tip: "Keep your lips closed and hum!", example: "Mmm-onkey - like you're eating something yummy!" },
-  { id: "11", word: "Goat", sound: "G", emoji: "🐐", difficulty: "easy", tip: "Make a sound in the back of your throat!", example: "G-g-goat - like gulping water!" },
-  { id: "21", word: "Thank you", sound: "TH", emoji: "🙏", difficulty: "hard", tip: "Tongue between teeth for TH, then 'ank you'!", example: "Th-ank you - tongue peeks out then smile!" },
-  // Missions Data
-  { id: "22", word: "Please help", sound: "PL", emoji: "🆘", difficulty: "hard", tip: "Pop your P then quickly lift tongue for L!", example: "Pl-ease help - pop then lift!" },
-];
 
 
-  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification } = useNotifications();
   const activeChapter = CHAPTERS.find(c => c.id === selectedChapterId) || CHAPTERS[0];
   const missionsForChapter = MISSIONS.filter(m => activeChapter.missions.includes(m.id));
 
@@ -353,18 +345,17 @@ const MISSIONS: Mission[] = [
           localStorage.setItem("xp", serverXp.toString());
           localStorage.setItem("level", serverLevel.toString());
           
-          toast.dismiss();
           toast.success(`Welcome back, ${name}! Level ${serverLevel} restored! 🌟`);
-          playTTS(`Welcome back, ${name}! I remember you! You are level ${serverLevel}!`);
+          playTTS(`Welcome back, ${name}! I'm so happy you're here! We are on Level ${serverLevel} now!`);
         } else {
           toast.dismiss();
           toast.success(`Welcome ${name}! Let's start learning!`);
-          playTTS(`Hi there ${name}! I'm so excited to play with you! Pick a mission to start!`);
+          playTTS(`Hi ${name}! I'm ${selectedBuddy.name} and I'm so excited to be your friend! Can you pick a mission for us to do?`);
         }
       } catch (e) {
         toast.dismiss();
         toast.success(`Welcome ${name}!`);
-        playTTS(`Hi there ${name}! Ready to play?`);
+        playTTS(`Hi there ${name}! I'm ${selectedBuddy.name}! Let's pick a fun mission together!`);
       }
 
       setGameState("select");
@@ -478,49 +469,36 @@ const MISSIONS: Mission[] = [
 
 
   const playTTS = async (text: string) => {
-    setIsSynthesizing(true); // System is busy
+    setIsSynthesizing(true);
     try {
       const voiceId = getVoiceForBuddy(selectedBuddy.id);
-      const res = await fetch(`${API_BASE}/tts`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, voice_id: voiceId, speed: voiceSpeed }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        if (errorData.useFallback) {
-          toast.error("AI Voice unavailable, using backup!");
-          await playTTSFallback(text);
-          setIsSynthesizing(false);
-          setIsSpeaking(false);
-          return;
-        }
-        throw new Error(errorData.hint || "TTS connection failed");
+      const audioUrl = await preloadTTS(text, voiceId);
+      
+      if (!audioUrl) {
+        console.warn("Preload failed, using fallback");
+        await playTTSFallback(text);
+        setIsSynthesizing(false);
+        setIsSpeaking(false);
+        return;
       }
 
-      const audioBlob = await res.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
       
-      // Sync animation with audio
       audio.onplay = () => setIsSpeaking(true);
       audio.onended = () => {
         setIsSpeaking(false);
-        setIsSynthesizing(false); // System free
-        URL.revokeObjectURL(audioUrl);
+        setIsSynthesizing(false);
       };
       audio.onerror = async () => {
         setIsSpeaking(false);
         await playTTSFallback(text);
         setIsSynthesizing(false);
-        URL.revokeObjectURL(audioUrl);
       };
       
       await audio.play();
     } catch (error: any) {
-      console.warn("TTS failed, using fallback:", error.message);
+      console.warn("TTS flow error, using fallback:", error.message);
       await playTTSFallback(text);
       setIsSynthesizing(false);
       setIsSpeaking(false);
@@ -548,27 +526,23 @@ const MISSIONS: Mission[] = [
     const targetWord = activeMission.word.toLowerCase().trim();
     const targetSound = activeMission.sound.toLowerCase().trim();
     
-    console.log(`🎙️ Hearing: "${normalizedText}" | Target: "${targetWord}"`);
+    // console.log(`🎙️ Hearing: "${normalizedText}" | Target: "${targetWord}"`);
 
-    // Flexible matching using regex for whole word or significant partials
     const targetRegex = new RegExp(`\\b${targetWord}\\b`, 'i');
-    
     const isCorrect = targetRegex.test(normalizedText) || 
                      normalizedText === targetWord ||
-                     (targetWord === "sun" && normalizedText.includes("son")) || // Common homophones
-                     (targetWord === "hair" && normalizedText.includes("hare"));
+                     (targetWord === "sun" && (normalizedText.includes("son") || normalizedText.includes("sun"))) || 
+                     (targetWord === "hair" && (normalizedText.includes("hare") || normalizedText.includes("hair")));
 
-    // Check for target sound if word missed
     const containsSound = normalizedText.includes(targetSound);
-    
     const isNearMiss = !isCorrect && containsSound;
     const newAttempts = attempts + 1;
     setAttempts(newAttempts);
 
-    const bonusXp = DIFFICULTY_XP[activeMission.difficulty];
+    const bonusXp = XP_PER_WORD;
 
     try {
-      await fetch(`${API_BASE}/sessions`, {
+      fetch(`${API_BASE}/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -582,17 +556,18 @@ const MISSIONS: Mission[] = [
           isNearMiss,
           xpEarned: isCorrect ? bonusXp : 0,
         }),
-      });
-    } catch {
-      // Silent fail
-    }
+      }).catch(() => {});
+    } catch { /* Silent fail */ }
 
-    // Adaptive Coaching Logic
     let feedback = "";
     if (isCorrect) {
       setSuccess(true);
-      setMood("happy"); // Happy buddy!
-      feedback = `Woohoo! You nailed it! The word was ${activeMission.word}! You are a rockstar!`;
+      setMood("happy");
+      
+      const sessionStars = calculateStars(newAttempts);
+      setStars(sessionStars);
+      
+      feedback = getRandomSuccessMessage() + ` The word was ${activeMission.word}!`;
       
       const confetti = (await import("canvas-confetti")).default;
       confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
@@ -601,13 +576,21 @@ const MISSIONS: Mission[] = [
       setStreak(newStreak);
       localStorage.setItem("streak", newStreak.toString());
       
-      const newXp = xp + bonusXp;
+      const totalEarned = bonusXp + (newAttempts === 1 ? PERFECT_ROUND_BONUS : 0);
+      const newXp = xp + totalEarned;
+      const oldLevel = getLevelFromXp(xp);
+      const newLevel = getLevelFromXp(newXp);
+      
       setXp(newXp);
       localStorage.setItem("xp", newXp.toString());
       
-      if (newXp >= level * 100) {
-        setLevel(l => l + 1);
-        triggerLevelUpNotification(level + 1, addNotification);
+      if (newLevel > oldLevel) {
+        setLevel(newLevel);
+        setShowLevelUp(true);
+        setMood("celebrating");
+        triggerLevelUpNotification(newLevel, addNotification);
+        localStorage.setItem("level", newLevel.toString());
+        feedback = getRandomLevelUpMessage() + " " + feedback;
       } else if (newStreak % 3 === 0) {
         triggerStreakNotification(newStreak, addNotification);
       }
@@ -615,45 +598,40 @@ const MISSIONS: Mission[] = [
       const newCompleted = [...new Set([...completedMissions, activeMission.id])];
       setCompletedMissions(newCompleted);
       localStorage.setItem("completedMissions", JSON.stringify(newCompleted));
+      feedback = getRandomSuccessMessage(selectedBuddy.id) + " " + feedback;
 
     } else if (isNearMiss) {
-       setMood("surprised"); // Encouraging/Curious look
-       feedback = `So close! I heard the "${activeMission.sound}" sound, but let's try to say the whole word "${activeMission.word}" clearly.`;
+       setMood("surprised");
+       feedback = getRandomRetryMessage() + ` You were so close! I heard the "${activeMission.sound}" sound, but let's try to say the whole word "${activeMission.word}" clearly.`;
        if (newAttempts >= 2) setShowTip(true);
     } else {
-       // Wrong Answer Handling
-       setMood("sad"); // Sad buddy :(
+       setMood("sad");
+       feedback = getRandomRetryMessage() + " " + feedback;
        
-       // Deduct XP (Penalty)
-       if (xp > 5) {
-         setXp(prev => Math.max(0, prev - 5)); // Lose 5 XP
-         toast.error("Oops! -5 XP. Try again!", { duration: 2000 });
+       if (xp > 2) {
+         setXp(prev => Math.max(0, prev - 2)); 
        }
 
-       // Reset Streak
        if (streak > 0) {
          setStreak(0);
          localStorage.setItem("streak", "0");
-         toast("Streak lost! 😢", { icon: "💔" });
        }
 
-       // Adaptive speed for failure
        if (newAttempts >= 2 && voiceSpeed > 0.7) setVoiceSpeed(0.7);
        
-       const sadNoises = ["Oh no!", "Oopsie!", "Uh oh!"];
+       const sadNoises = ["Oh no!", "Oopsie!", "Uh oh!", "Not quite yet!", "Let's try again!"];
        const sadPrefix = sadNoises[Math.floor(Math.random() * sadNoises.length)];
 
        if (newAttempts === 1) {
-         feedback = `${sadPrefix} Not quite. Remember, for ${activeMission.word}, ${activeMission.tip}`;
+         feedback = `${sadPrefix} ${activeMission.word} can be tricky! Remember, for this sound, ${activeMission.tip}`;
        } else if (newAttempts === 2) {
-         feedback = `${sadPrefix} Let's slow down. Listen to me: ${activeMission.sound}... ${activeMission.word}. Now you try!`;
+         feedback = `${sadPrefix} Let's try it slowly together. Listen to me: ${activeMission.sound}... ${activeMission.word}. Your turn!`;
        } else {
-         feedback = `Don't give up! Look at my mouth. ${activeMission.example}. Try one more time!`;
+         feedback = `You're working so hard! I love it! Let's watch how I say it: ${activeMission.example}. Try one more!`;
        }
        if (newAttempts >= 2) setShowTip(true);
     }
 
-    // Add to conversation history
     setConversationHistory(prev => [
       ...prev, 
       { sender: 'kid', text: text },
@@ -662,22 +640,23 @@ const MISSIONS: Mission[] = [
 
     await playTTS(feedback);
     
-    // Reset mood after speech if it was sad
     if (!isCorrect && !isNearMiss) {
       setTimeout(() => setMood("happy"), 4000); 
     }
   };
 
-  const currentLevelXp = xp % xpForNextLevel;
-  const xpPercent = (currentLevelXp / xpForNextLevel) * 100;
+  // console.log("Current status:", { xp, level, gameState });
 
   return (
-    <div className="min-h-screen p-4 md:p-6 flex flex-col items-center relative overflow-hidden">
+    <div 
+      className="min-h-screen p-4 md:p-6 flex flex-col items-center relative overflow-hidden" 
+      suppressHydrationWarning
+    >
       <InteractiveBackground />
 
       <GuidedTour 
         steps={PLAY_TOUR_STEPS} 
-        onComplete={() => console.log("Play tour complete")} 
+        onComplete={() => {}} 
         storageKey="play-tour-v1" 
       />
 
@@ -754,26 +733,30 @@ const MISSIONS: Mission[] = [
                   whileHover={{ scale: 1.05 }} 
                   whileTap={{ scale: 0.95 }}
                   className="p-4 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border-2 border-white/80"
+                  suppressHydrationWarning
                 >
                   <ArrowLeft size={24} className="text-slate-700" />
                 </motion.button>
               </Link>
               <div className="flex items-center gap-4">
-                <div className="bg-white/80 backdrop-blur-md px-6 py-3 rounded-2xl shadow-lg border-2 border-white/80 text-right min-w-[140px]">
-                  <p className="text-[10px] font-black uppercase text-primary tracking-widest leading-none mb-2">Level {level}</p>
-                  <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-1">
-                    <motion.div 
-                      className="h-full bg-gradient-to-r from-primary to-orange-400"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${xp % 100}%` }}
-                    />
+                {hasMounted && (
+                  <div className="bg-white/80 backdrop-blur-md px-6 py-3 rounded-2xl shadow-lg border-2 border-white/80 text-right min-w-[140px]" suppressHydrationWarning>
+                    <p className="text-[10px] font-black uppercase text-primary tracking-widest leading-none mb-2">Explorer Level {level}</p>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden mb-1">
+                      <motion.div 
+                        className="h-full bg-gradient-to-r from-primary to-orange-400"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${xpInfo.percent}%` }}
+                      />
+                    </div>
+                    <p className="text-sm font-black text-slate-400 leading-none">{xpInfo.current}/{xpInfo.required} XP</p>
                   </div>
-                  <p className="text-sm font-black text-slate-400 leading-none">{xp % 100}/100 XP</p>
-                </div>
+                )}
                 <button 
                   onClick={logout}
                   className="p-4 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border-2 border-white/80 hover:bg-red-50 hover:border-red-200 transition-colors group"
                   title="Switch User"
+                  suppressHydrationWarning
                 >
                   <RefreshCw size={24} className="text-slate-700 group-hover:rotate-180 transition-transform duration-500" />
                 </button>
@@ -852,7 +835,7 @@ const MISSIONS: Mission[] = [
                         Level {chapter.level}
                       </p>
                       <p className="font-black text-slate-800 text-sm">
-                        {chapter.title} {isLocked && "🔒"}
+                        {chapter.title} {isLocked && "ðŸ”’"}
                       </p>
                     </div>
                   </motion.button>
@@ -861,7 +844,7 @@ const MISSIONS: Mission[] = [
             </div>
 
             <p className="text-xl text-slate-500 mb-8 font-bold text-center">
-              Pick a mission from <span className="text-primary font-black uppercase tracking-widest">{activeChapter.title}</span>!
+              Pick a mission from <span className="text-primary font-black uppercase tracking-widest">{activeChapter.title}</span> below!
             </p>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full px-6">
@@ -875,17 +858,18 @@ const MISSIONS: Mission[] = [
                     onClick={() => startPractice(mission)}
                     onMouseEnter={() => playCachedTTS(mission.word, getVoiceForBuddy(selectedBuddy.id))}
                     className="relative bg-white/80 backdrop-blur-xl p-8 rounded-[3rem] border-4 border-white shadow-xl hover:shadow-2xl transition-all group"
+                    suppressHydrationWarning
                   >
                     {isCompleted && (
                       <div className="absolute -top-3 -right-3 bg-green-500 text-white p-2 rounded-full shadow-lg border-4 border-white z-10">
                         <Star size={16} fill="white" />
                       </div>
                     )}
-                    <div className="text-7xl mb-4 group-hover:scale-110 transition-transform text-center">{mission.emoji}</div>
-                    <h3 className="text-2xl font-black text-slate-800 mb-1 text-center">{mission.word}</h3>
-                    <div className="flex items-center justify-center gap-1">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-primary">Sound</span>
-                      <span className="bg-primary/10 text-primary px-2 py-0.5 rounded-lg text-sm font-black">{mission.sound}</span>
+                    <div className="text-7xl mb-1 group-hover:scale-110 transition-transform text-center drop-shadow-md">{mission.emoji}</div>
+                    <h3 className="text-2xl font-black text-slate-800 tracking-tight text-center">{mission.word}</h3>
+                    <div className="flex items-center justify-center gap-2 bg-slate-50 px-3 py-1 rounded-full">
+                      <span className="text-[9px] font-black uppercase tracking-tighter text-slate-400">Magic Sound</span>
+                      <span className="text-primary text-xl font-black leading-none">{mission.sound}</span>
                     </div>
                   </motion.button>
                 );
@@ -1081,13 +1065,35 @@ const MISSIONS: Mission[] = [
                    animate={{ opacity: 1, scale: 1, y: 0 }}
                    className="flex flex-col items-center gap-6 w-full"
                  >
-                   <div className="flex flex-col items-center animate-bounce">
-                     <span className="text-6xl mb-2">🌟</span>
-                     <h3 className="text-4xl font-black text-slate-800 text-center tracking-tight leading-none">
-                       Way to go!
-                     </h3>
-                     <p className="text-slate-500 font-bold mt-1 text-lg">You nailed it!</p>
-                   </div>
+                   <div className="flex flex-col items-center">
+                    <motion.div
+                      animate={{ 
+                        scale: [1, 1.2, 1],
+                        rotate: [0, 10, -10, 0]
+                      }}
+                      transition={{ duration: 0.5, repeat: 3 }}
+                       className="text-8xl mb-4 filter drop-shadow-xl">🌟</motion.div>
+                    <h3 className="text-5xl font-black text-slate-800 text-center tracking-tighter leading-none mb-2 uppercase">
+                      WAY TO GO!
+                    </h3>
+                    <div className="flex gap-2 mb-2">
+                       {[1, 2, 3].map(i => (
+                         <motion.span 
+                           key={i}
+                           initial={{ opacity: 0, scale: 0 }}
+                           animate={{ 
+                             opacity: i <= stars ? 1 : 0.3, 
+                             scale: i <= stars ? 1.2 : 1 
+                           }}
+                           transition={{ delay: 0.2 + i * 0.1, type: "spring" }}
+                            className={`text-4xl ${i <= stars ? "filter drop-shadow-md" : "grayscale opacity-50"}`}
+                         >
+                           {i <= stars ? "⭐" : "☆"}
+                         </motion.span>
+                       ))}
+                     </div>
+                    <p className="text-slate-500 font-black text-xl uppercase tracking-widest">You nailed it!</p>
+                  </div>
                    
                    <motion.button
                      whileHover={{ scale: 1.05 }}
@@ -1102,7 +1108,7 @@ const MISSIONS: Mission[] = [
                      Next Mission <ArrowRight size={24} />
                    </motion.button>
                  </motion.div>
-               )}
+                )}
             </div>
 
             <AnimatePresence>
@@ -1135,6 +1141,83 @@ const MISSIONS: Mission[] = [
               </motion.div>
             )}
             
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isOffline && (
+          <motion.div 
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="fixed bottom-8 bg-black/80 backdrop-blur-xl text-white px-6 py-4 rounded-[2rem] shadow-2xl z-[100] flex items-center gap-4 border-2 border-white/20"
+          >
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
+            <span className="font-bold text-sm uppercase tracking-widest">WIFI LOST! Voices might sleep soon!</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showLevelUp && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-primary/20 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ scale: 0.8, rotate: -5 }}
+              animate={{ scale: 1, rotate: 0 }}
+              className="bg-white rounded-[3rem] p-8 max-w-sm w-full shadow-2xl border-8 border-white text-center relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-primary/10 to-transparent -z-10" />
+              <div className="text-7xl mb-4">ðŸ†</div>
+              <h2 className="text-4xl font-black text-slate-800 leading-none mb-2 tracking-tighter">LEVEL UP!</h2>
+              <p className="text-xl font-bold text-primary mb-6">Welcome to Level {level}!</p>
+              
+              <div className="bg-slate-50 rounded-2xl p-4 mb-8">
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Total Progress</p>
+                <div className="text-2xl font-black text-slate-700">{xp} XP Earned!</div>
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowLevelUp(false)}
+                className="w-full py-4 bg-primary text-white rounded-2xl font-black shadow-xl shadow-primary/30 border-4 border-white/20"
+              >
+                HECK YES!
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {speechError?.includes("blocked") && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] bg-slate-900/80 backdrop-blur-xl flex items-center justify-center p-6"
+          >
+             <motion.div 
+               initial={{ scale: 0.9, y: 20 }}
+               animate={{ scale: 1, y: 0 }}
+               className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border-8 border-white"
+             >
+                <div className="text-6xl mb-6">🔒</div>
+                <h2 className="text-2xl font-black text-slate-800 mb-2">Microphone Blocked</h2>
+                <p className="text-slate-500 font-bold mb-6">To hear you, I need your permission. Click the <span className="text-primary">Microphone icon</span> in your browser's address bar to let me in! 🎤</p>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="w-full py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/30"
+                >
+                  GOT IT, RELOAD!
+                </button>
+             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

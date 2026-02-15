@@ -93,9 +93,7 @@ export default function ParentDashboard() {
     ? Math.max(...Object.values(stats.dailyActivity), 1)
     : 1;
 
-  const totalXp = stats?.recentSessions
-    ? stats.recentSessions.reduce((sum, s) => sum + (s.xpEarned || 0), 0)
-    : 0;
+  const totalXp = (stats as any)?.totalXp || 0;
 
   const avgAttemptsPerSuccess = stats
     ? stats.successes > 0
