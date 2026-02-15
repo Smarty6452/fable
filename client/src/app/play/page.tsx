@@ -244,8 +244,16 @@ export default function PlayPage() {
         || voices.find(v => v.lang.startsWith('en-US'))
         || voices.find(v => v.lang.startsWith('en'));
       if (preferred) utterance.voice = preferred;
-      utterance.onend = () => resolve();
-      utterance.onerror = () => resolve();
+      
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        resolve();
+      };
+      utterance.onerror = () => {
+        setIsSpeaking(false); 
+        resolve();
+      };
       window.speechSynthesis.speak(utterance);
     });
   };
@@ -276,8 +284,10 @@ export default function PlayPage() {
     }
   };
 
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
   const playTTS = async (text: string) => {
-    setIsSynthesizing(true);
+    setIsSynthesizing(true); // System is busy
     try {
       const voiceId = getVoiceForBuddy(selectedBuddy.id);
       const res = await fetch(`${API_BASE}/tts`, {
@@ -292,6 +302,7 @@ export default function PlayPage() {
           toast.error("AI Voice unavailable, using backup!");
           await playTTSFallback(text);
           setIsSynthesizing(false);
+          setIsSpeaking(false);
           return;
         }
         throw new Error(errorData.hint || "TTS connection failed");
@@ -301,20 +312,27 @@ export default function PlayPage() {
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       audioRef.current = audio;
+      
+      // Sync animation with audio
+      audio.onplay = () => setIsSpeaking(true);
       audio.onended = () => {
-        setIsSynthesizing(false);
+        setIsSpeaking(false);
+        setIsSynthesizing(false); // System free
         URL.revokeObjectURL(audioUrl);
       };
       audio.onerror = async () => {
+        setIsSpeaking(false);
         await playTTSFallback(text);
         setIsSynthesizing(false);
         URL.revokeObjectURL(audioUrl);
       };
+      
       await audio.play();
     } catch (error: any) {
       console.warn("TTS failed, using fallback:", error.message);
       await playTTSFallback(text);
       setIsSynthesizing(false);
+      setIsSpeaking(false);
     }
   };
 
@@ -863,7 +881,7 @@ export default function PlayPage() {
             <div className="relative mb-8 flex flex-col items-center justify-center mt-12 w-full">
                <BuddyMascot 
                 isListening={isListening} 
-                isSynthesizing={isSynthesizing} 
+                isSynthesizing={isSpeaking} 
                 buddyType={selectedBuddy.id}
                 size={300} 
                 mood={mood}
