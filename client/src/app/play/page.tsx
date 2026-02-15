@@ -341,10 +341,26 @@ export default function PlayPage() {
     setSpeechError(null);
     setIsListening(true); // Optimistic update
     
-    // Play subtle "listening" sound
-    const audio = new Audio("/sounds/pop.mp3"); // Ensure this file exists or use encoded
-    audio.volume = 0.2;
-    audio.play().catch(() => {});
+    // Play subtle "listening" sound (Synthesized Pop)
+    const playPop = () => {
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      } catch (e) { /* ignore audio errors */ }
+    };
+    playPop();
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
@@ -998,6 +1014,7 @@ export default function PlayPage() {
                 </motion.div>
               )}
             </AnimatePresence>
+
             {speechError && !isListening && !success && (
               <motion.div 
                 initial={{ opacity: 0, y: 10 }}
