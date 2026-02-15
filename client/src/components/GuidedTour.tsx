@@ -104,42 +104,47 @@ export default function GuidedTour({ steps, onComplete, storageKey }: GuidedTour
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Overlay */}
+          {/* Click Handler Overlay (Transparent) */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            className="fixed inset-0 z-40 cursor-pointer"
             onClick={handleSkip}
           />
 
-          {/* Highlight */}
+          {/* Highlight & Dimmer */}
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ 
               opacity: 1, 
               scale: 1,
-              boxShadow: [
-                "0 0 0 9999px rgba(0,0,0,0.65), 0 0 30px rgba(255,140,0,0.4)",
-                "0 0 0 9999px rgba(0,0,0,0.65), 0 0 50px rgba(255,140,0,0.6)",
-                "0 0 0 9999px rgba(0,0,0,0.65), 0 0 30px rgba(255,140,0,0.4)"
-              ] 
+              boxShadow: "0 0 0 9999px rgba(0,0,0,0.75)" 
             }}
             exit={{ opacity: 0, scale: 1.05 }}
             className="fixed z-50 pointer-events-none"
             style={{
-              top: targetRect.top - 12,
-              left: targetRect.left - 12,
-              width: targetRect.width + 24,
-              height: targetRect.height + 24,
-              border: "4px solid white",
-              borderRadius: "2rem",
+              top: targetRect.top - 8,
+              left: targetRect.left - 8,
+              width: targetRect.width + 16,
+              height: targetRect.height + 16,
+              borderRadius: "1.5rem",
             }}
-            transition={{ 
-              boxShadow: { duration: 2, repeat: Infinity, ease: "linear" },
-              default: { duration: 0.3 }
-            }}
-          />
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            {/* Pulsing Border Glow */}
+            <motion.div
+              className="absolute inset-0 rounded-[1.5rem] border-[4px] border-white"
+              animate={{ 
+                boxShadow: [
+                  "0 0 20px rgba(255,255,255,0.3)",
+                  "0 0 40px rgba(255,255,255,0.6)",
+                  "0 0 20px rgba(255,255,255,0.3)"
+                ] 
+              }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            />
+          </motion.div>
 
           {/* Tooltip */}
           <motion.div
