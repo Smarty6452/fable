@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Bell, X, Trophy, Star, Zap, Award, Gift } from "lucide-react";
 
@@ -31,35 +31,40 @@ export function useNotifications() {
     }
   }, []);
 
-  const addNotification = (notif: Omit<Notification, "id" | "timestamp" | "read">) => {
-    const newNotif: Notification = {
-      ...notif,
-      id: `${Date.now()}-${Math.random()}`,
-      timestamp: Date.now(),
-      read: false,
-    };
+  const addNotification = useCallback((notif: Omit<Notification, "id" | "timestamp" | "read">) => {
+    setNotifications(prev => {
+      const newNotif: Notification = {
+        ...notif,
+        id: `${Date.now()}-${Math.random()}`,
+        timestamp: Date.now(),
+        read: false,
+      };
+      const updated = [newNotif, ...prev].slice(0, 20);
+      localStorage.setItem("talkybuddy-notifications", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
-    const updated = [newNotif, ...notifications].slice(0, 20); // Keep last 20
-    setNotifications(updated);
-    localStorage.setItem("talkybuddy-notifications", JSON.stringify(updated));
-  };
+  const markAsRead = useCallback((id: string) => {
+    setNotifications(prev => {
+      const updated = prev.map(n => n.id === id ? { ...n, read: true } : n);
+      localStorage.setItem("talkybuddy-notifications", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
-  const markAsRead = (id: string) => {
-    const updated = notifications.map(n => n.id === id ? { ...n, read: true } : n);
-    setNotifications(updated);
-    localStorage.setItem("talkybuddy-notifications", JSON.stringify(updated));
-  };
+  const markAllAsRead = useCallback(() => {
+    setNotifications(prev => {
+      const updated = prev.map(n => ({ ...n, read: true }));
+      localStorage.setItem("talkybuddy-notifications", JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
-  const markAllAsRead = () => {
-    const updated = notifications.map(n => ({ ...n, read: true }));
-    setNotifications(updated);
-    localStorage.setItem("talkybuddy-notifications", JSON.stringify(updated));
-  };
-
-  const clearAll = () => {
+  const clearAll = useCallback(() => {
     setNotifications([]);
     localStorage.removeItem("talkybuddy-notifications");
-  };
+  }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 

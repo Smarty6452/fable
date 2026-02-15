@@ -162,7 +162,8 @@ export default function InteractiveBackground() {
 function BackgroundMusic() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.3);
-  const audioRef = useState(() => typeof Audio !== "undefined" ? new Audio("/happy-tunes.mp3") : null)[0];
+  // const audioRef = useState(() => typeof Audio !== "undefined" ? new Audio("/happy-tunes.mp3") : null)[0];
+  const [audioRef] = useState<HTMLAudioElement | null>(null); // Disabled until valid MP3 provided
 
   useEffect(() => {
     if (audioRef) {
