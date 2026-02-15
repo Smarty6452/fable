@@ -61,7 +61,10 @@ export default function ParentDashboard() {
   };
 
   useEffect(() => {
-    fetch(`${API_BASE}/stats`)
+    const kidName = localStorage.getItem("kidName");
+    const query = kidName ? `?kid=${encodeURIComponent(kidName)}` : "";
+    
+    fetch(`${API_BASE}/stats${query}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) setStats(data.data);

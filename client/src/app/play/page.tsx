@@ -144,14 +144,42 @@ export default function PlayPage() {
     fetchVoices();
   }, [addNotification]);
 
-  const saveOnboarding = () => {
+  const saveOnboarding = async () => {
     if (kidName.trim()) {
-      localStorage.setItem("kidName", kidName.trim());
+      const name = kidName.trim();
+      localStorage.setItem("kidName", name);
       localStorage.setItem("selectedBuddy", selectedBuddy.id);
+      
+      // Attempt to restore progress from server
+      try {
+        toast.loading("Checking for saved adventure...");
+        const res = await fetch(`${API_BASE}/stats?kid=${encodeURIComponent(name)}`);
+        const data = await res.json();
+        
+        if (data.success && data.data.totalXp > 0) {
+          const serverXp = data.data.totalXp;
+          const serverLevel = Math.floor(serverXp / 100) + 1;
+          
+          setXp(serverXp);
+          setLevel(serverLevel);
+          localStorage.setItem("xp", serverXp.toString());
+          localStorage.setItem("level", serverLevel.toString());
+          
+          toast.dismiss();
+          toast.success(`Welcome back, ${name}! Level ${serverLevel} restored! 🌟`);
+          playTTS(`Welcome back, ${name}! I remember you! You are level ${serverLevel}!`);
+        } else {
+          toast.dismiss();
+          toast.success(`Welcome ${name}! Let's start learning!`);
+          playTTS(`Hi there ${name}! I'm so excited to play with you! Pick a mission to start!`);
+        }
+      } catch (e) {
+        toast.dismiss();
+        toast.success(`Welcome ${name}!`);
+        playTTS(`Hi there ${name}! Ready to play?`);
+      }
+
       setGameState("select");
-      toast.success(`Welcome ${kidName}! Let's start learning!`);
-      // Welcome TTS
-      playTTS(`Hi there ${kidName}! I'm so excited to play with you! Pick a mission to start!`);
     }
   };
 
@@ -528,7 +556,7 @@ export default function PlayPage() {
 
             <input
               type="text"
-              placeholder="Type your name..."
+              placeholder="Type your name to start or continue..."
               value={kidName}
               onChange={(e) => setKidName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && kidName.trim() && saveOnboarding()}

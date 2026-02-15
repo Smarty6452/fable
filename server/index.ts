@@ -225,6 +225,8 @@ app.get('/api/stats', async (req, res) => {
       if (dailyActivity[day] !== undefined) dailyActivity[day]++;
     }
 
+    const totalXp = sessions.reduce((sum, s) => sum + (s.xpEarned || 0), 0);
+
     res.json({
       success: true,
       data: {
@@ -232,6 +234,7 @@ app.get('/api/stats', async (req, res) => {
         successes,
         nearMisses,
         successRate: total > 0 ? Math.round((successes / total) * 100) : 0,
+        totalXp,
         soundBreakdown: soundMap,
         dailyActivity,
         recentSessions: sessions.slice(0, 20),
