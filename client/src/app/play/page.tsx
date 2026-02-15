@@ -43,21 +43,9 @@ export default function PlayPage() {
   // Hooks
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification } = useNotifications();
 
-  // Core Game State — determine initial state synchronously to prevent flash
-  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "ending">(() => {
-    if (typeof window !== "undefined" && localStorage.getItem("kidName")) return "select";
-    return "onboarding";
-  });
-  const [selectedBuddy, setSelectedBuddy] = useState(() => {
-    if (typeof window !== "undefined") {
-      const savedId = localStorage.getItem("selectedBuddy");
-      if (savedId) {
-        const found = BUDDIES.find(b => b.id === savedId);
-        if (found) return found;
-      }
-    }
-    return BUDDIES[0];
-  });
+  // Core Game State — Init with defaults to prevent Hydration Error
+  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "ending">("onboarding");
+  const [selectedBuddy, setSelectedBuddy] = useState(BUDDIES[0]);
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
   
   // Audio/Voice State
@@ -71,30 +59,12 @@ export default function PlayPage() {
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
 
-  // Progress State — read localStorage synchronously to prevent layout shift
-  const [kidName, setKidName] = useState(() => {
-    if (typeof window !== "undefined") return localStorage.getItem("kidName") || "";
-    return "";
-  });
-  const [xp, setXp] = useState(() => {
-    if (typeof window !== "undefined") return parseInt(localStorage.getItem("xp") || "0");
-    return 0;
-  });
-  const [level, setLevel] = useState(() => {
-    if (typeof window !== "undefined") return parseInt(localStorage.getItem("level") || "1");
-    return 1;
-  });
-  const [streak, setStreak] = useState(() => {
-    if (typeof window !== "undefined") return parseInt(localStorage.getItem("streak") || "0");
-    return 0;
-  });
-  const [completedMissions, setCompletedMissions] = useState<string[]>(() => {
-    if (typeof window !== "undefined") {
-      try { return JSON.parse(localStorage.getItem("completedMissions") || "[]"); }
-      catch { return []; }
-    }
-    return [];
-  });
+  // Progress State — Init with defaults
+  const [kidName, setKidName] = useState("");
+  const [xp, setXp] = useState(0);
+  const [level, setLevel] = useState(1);
+  const [streak, setStreak] = useState(0);
+  const [completedMissions, setCompletedMissions] = useState<string[]>([]);
   
   // UI State
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
@@ -114,41 +84,47 @@ export default function PlayPage() {
   const xpInfo = useMemo(() => getXpProgressInLevel(xp), [xp]);
   const unlockedChapters = useMemo(() => getUnlockedChapters(xp), [xp]);
 
-  // Load Saved Progress (gameState + buddy already set via initializers — no flash)
+  // Hydrate State on Mount (Client-Side Only)
   useEffect(() => {
     setHasMounted(true);
+    
+    // Safely read localStorage
     const savedName = localStorage.getItem("kidName");
+    const savedBuddyId = localStorage.getItem("selectedBuddy");
     const savedXp = localStorage.getItem("xp");
     const savedLevel = localStorage.getItem("level");
     const savedStreak = localStorage.getItem("streak");
     const savedMissions = localStorage.getItem("completedMissions");
 
+    if (savedName) setKidName(savedName);
+    if (savedName) setGameState("select");
+
+    if (savedBuddyId) {
+      const found = BUDDIES.find(b => b.id === savedBuddyId);
+      if (found) setSelectedBuddy(found);
+    }
+    if (savedXp) setXp(parseInt(savedXp));
+    if (savedLevel) setLevel(parseInt(savedLevel));
+    if (savedStreak) setStreak(parseInt(savedStreak));
+    if (savedMissions) {
+      try { setCompletedMissions(JSON.parse(savedMissions)); } catch {}
+    }
+
     if (savedName) {
-      setKidName(savedName);
-      if (savedXp) setXp(parseInt(savedXp));
-      if (savedLevel) setLevel(parseInt(savedLevel));
-      if (savedStreak) setStreak(parseInt(savedStreak));
-      if (savedMissions) setCompletedMissions(JSON.parse(savedMissions));
-
-      // Verbal Greeting Hand-off from Homepage (single greeting, no overlap)
-      const isNewSession = sessionStorage.getItem("justLoggedIn");
-      if (isNewSession) {
-        sessionStorage.removeItem("justLoggedIn");
-        const greetingText = `Hi ${savedName}! I am so happy you are here! Pick your spirit buddy below to start our magical voice adventure!`;
-        // Small delay so the user settles on the page first
-        setTimeout(() => playTTS(greetingText), 500);
-      }
-
-      // Add welcome notification if none exist
-      const welcomeKey = "fable-welcome-notified";
-      if (!localStorage.getItem(welcomeKey)) {
-        addNotification({
-          type: "reward",
-          title: "Welcome!",
-          message: "Ready for an adventure? Let's practice some sounds!",
-        });
-        localStorage.setItem(welcomeKey, "true");
-      }
+       const isNewSession = sessionStorage.getItem("justLoggedIn");
+       if (isNewSession) {
+         sessionStorage.removeItem("justLoggedIn");
+         const greetingText = `Hi ${savedName}! I am so happy you are here! Pick your buddy below to start our adventure!`;
+         const currentBuddyId = savedBuddyId || "wolf";
+         const voice = getVoiceForBuddy(currentBuddyId);
+         setTimeout(() => playTTS(greetingText, voice), 500);
+       }
+       
+       const welcomeKey = "fable-welcome-notified";
+       if (!localStorage.getItem(welcomeKey)) {
+         addNotification({ type: "reward", title: "Welcome!", message: "Ready for an adventure? Let's practice some sounds!" });
+         localStorage.setItem(welcomeKey, "true");
+       }
     }
   }, [addNotification]);
 
@@ -236,11 +212,11 @@ export default function PlayPage() {
     });
   };
 
-  const playTTS = async (text: string): Promise<void> => {
+  const playTTS = async (text: string, voiceIdOverride?: string): Promise<void> => {
     stopAllAudio();
     setIsSynthesizing(true);
     try {
-      const voiceId = getVoiceForBuddy(selectedBuddy.id);
+      const voiceId = voiceIdOverride || getVoiceForBuddy(selectedBuddy.id);
       const audioUrl = await preloadTTS(text, voiceId, voiceSpeed);
       if (!audioUrl) { await playTTSFallback(text); setIsSynthesizing(false); return; }
       const audio = new Audio(audioUrl);
