@@ -628,6 +628,33 @@ export default function PlayPage() {
                   onMarkAllAsRead={markAllAsRead}
                   onClearAll={clearAll}
                 />
+                
+                {/* Reset Progress Button */}
+                <button
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to delete all progress for this name? This cannot be undone!")) {
+                       localStorage.clear();
+                       // Also potentially wipe server data via API? For now, focused on client reset + clean slate visual.
+                       // Just refreshing allows restart.
+                       // Ideally, we'd delete server sessions, but simple 'logout' is safer for hackathon unless requested.
+                       // Wait, user asked for 'create user with same name' handling.
+                       // So maybe just logging out is enough, but to truly 'reset', we should clear local state.
+                       setXp(0);
+                       setLevel(1);
+                       setStreak(0);
+                       setCompletedMissions([]);
+                       localStorage.removeItem("xp");
+                       localStorage.removeItem("level");
+                       localStorage.removeItem("streak");
+                       localStorage.removeItem("completedMissions");
+                       toast.success("Progress reset! Starting fresh.");
+                    }
+                  }}
+                  className="p-3 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border-2 border-white/80 hover:bg-red-50 hover:border-red-200 transition-colors group"
+                  title="Reset Progress"
+                >
+                  <RefreshCw size={20} className="text-slate-400 group-hover:text-red-500 transition-colors" />
+                </button>
               </div>
             </div>
 

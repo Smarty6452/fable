@@ -182,7 +182,7 @@ app.post('/api/sessions', async (req, res) => {
 app.get('/api/sessions', async (req, res) => {
   try {
     const { kid, limit = 50 } = req.query;
-    const filter = kid ? { kidName: kid } : {};
+    const filter = kid ? { kidName: { $regex: new RegExp(`^${kid}$`, 'i') } } : {};
     const sessions = await Session.find(filter)
       .sort({ createdAt: -1 })
       .limit(Number(limit));
@@ -196,7 +196,8 @@ app.get('/api/sessions', async (req, res) => {
 app.get('/api/stats', async (req, res) => {
   try {
     const { kid } = req.query;
-    const filter = kid ? { kidName: kid } : {};
+    // Case-insensitive search
+    const filter = kid ? { kidName: { $regex: new RegExp(`^${kid}$`, 'i') } } : {};
     const sessions = await Session.find(filter).sort({ createdAt: -1 });
 
     const total = sessions.length;
