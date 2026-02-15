@@ -244,6 +244,28 @@ export default function PlayPage() {
      }
   };
 
+  const handleBuddySelect = (buddyId: string) => {
+    const buddy = BUDDIES.find(b => b.id === buddyId);
+    if (!buddy) return;
+
+    setSelectedBuddy(buddy);
+    localStorage.setItem("selectedBuddy", buddy.id);
+
+    // Play Voice Preview
+    const voiceId = getVoiceForBuddy(buddyId);
+    let intro = `Hi! I'm ${buddy.name}! Let's play!`;
+    
+    switch(buddyId) {
+      case "wolf": intro = "Hi there! I'm Wolfie! I'm ready to howl with fun!"; break;
+      case "cat": intro = "Meow! I'm Luna. You are purr-fect!"; break;
+      case "robot": intro = "Beep boop. I am Bolt. Ready to process words."; break;
+      case "puppy": intro = "Woof woof! I'm Max! Let's play catch with words!"; break;
+      case "panda": intro = "Hello friend. I'm Mochi. Let's learn together."; break;
+    }
+    
+    playTTS(intro, voiceId);
+  };
+
   const handleChatInput = async (text: string) => {
     if (!text.trim()) return;
     setChatHistory(prev => [...prev, { role: "user", text }]);
@@ -668,7 +690,7 @@ export default function PlayPage() {
             <div className="relative">
               <BuddySelector
                 selectedId={selectedBuddy.id}
-                onSelect={(id) => setSelectedBuddy(BUDDIES.find(b => b.id === id)!)}
+                onSelect={handleBuddySelect}
               />
               <button
                 onClick={() => startListening("buddy")}
@@ -765,6 +787,13 @@ export default function PlayPage() {
               <h2 className="text-5xl font-black text-slate-800 tracking-tight">
                 Ready, {kidName}?
               </h2>
+              
+              <div className="mt-4 mb-2 scale-90 origin-top">
+                <BuddySelector
+                  selectedId={selectedBuddy.id}
+                  onSelect={handleBuddySelect}
+                />
+              </div>
             </div>
 
             <div className="flex flex-wrap justify-center gap-3 mb-10">
