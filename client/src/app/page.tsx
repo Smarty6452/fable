@@ -95,6 +95,20 @@ export default function HomePage() {
   useEffect(() => {
     setExistingUser(localStorage.getItem("kidName"));
     const t = setTimeout(() => setShowContent(true), 150);
+    
+    // Connectivity Check for Voice AI
+    const checkBackend = async () => {
+      try {
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+        const res = await fetch(`${API_BASE}/health`);
+        const data = await res.json();
+        console.log("🎙️ Voice AI System:", data.status === 'ok' ? "ONLINE ✓" : "OFFLINE ✗");
+      } catch (e) {
+        console.warn("🎙️ Voice AI System: OFFLINE (Check if backend npm run dev is running on port 5000)");
+      }
+    };
+    checkBackend();
+
     return () => clearTimeout(t);
   }, []);
 
@@ -326,14 +340,47 @@ export default function HomePage() {
               </motion.p>
 
               {/* CTA & Actions Area */}
-              <motion.div variants={fadeUp} className="flex flex-col items-center gap-8 mb-14 w-full max-w-lg mx-auto">
-                {/* Main Buttons Row */}
+              <motion.div variants={fadeUp} className="flex flex-col items-center gap-6 mb-14 w-full max-w-lg mx-auto">
+                
+                {/* 1. Name Input Area (Top) */}
+                {!existingUser ? (
+                  <motion.div 
+                    animate={isShaking ? { x: [-5, 5, -5, 5, 0] } : {}}
+                    transition={{ duration: 0.4 }}
+                    className="w-full flex flex-col items-center gap-3"
+                  >
+                    <div className="relative group w-full max-w-sm">
+                      <div className="absolute -top-3 left-6 px-2 bg-[#FFF9F2] text-[10px] font-black text-[#8B7FDE] uppercase tracking-widest z-10 transition-colors group-focus-within:text-primary">
+                        Who is exploring?
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Type your name here..."
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleStart()}
+                        className={`w-full px-8 py-5 bg-white/60 backdrop-blur-xl rounded-[2rem] border-4 outline-none text-xl font-black text-slate-800 shadow-xl transition-all placeholder:text-slate-300 text-center ${
+                          isShaking ? "border-red-400" : "border-white focus:border-[#8B7FDE]"
+                        }`}
+                      />
+                      <motion.div 
+                        animate={name.trim() ? { scale: [1, 1.1, 1] } : {}}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                        className="absolute -right-2 -top-2 bg-primary text-white p-2 rounded-full shadow-lg border-2 border-white scale-0 group-focus-within:scale-100 transition-transform"
+                      >
+                        <Heart size={16} fill="white" />
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                ) : null}
+
+                {/* 2. Action Buttons Row (Below Name) */}
                 <div className="flex flex-row items-center justify-center gap-3 w-full">
                   <MagneticButton
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={handleStart}
-                    className="group relative flex-1 max-w-[240px] px-6 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-lg shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer"
+                    className="group relative flex-[1.5] max-w-[280px] px-6 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-lg shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer"
                   >
                     <motion.div
                       className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
@@ -342,16 +389,16 @@ export default function HomePage() {
                     />
                     <span className="relative z-10 flex items-center justify-center gap-2">
                       <Sparkles size={18} />
-                      {existingUser ? "Continue" : "Start"}
+                      {existingUser ? "Let's Play!" : "Start Adventure"}
                       <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                     </span>
                   </MagneticButton>
 
-                  <Link href="/parent" data-tour="parent-portal" className="flex-1 max-w-[200px]">
+                  <Link href="/parent" data-tour="parent-portal" className="flex-1 max-w-[180px]">
                     <MagneticButton
                       whileHover={{ scale: 1.03 }}
                       whileTap={{ scale: 0.97 }}
-                      className="w-full px-6 py-5 bg-white/80 backdrop-blur-xl rounded-[2rem] text-slate-700 font-black text-lg shadow-lg hover:shadow-xl border-4 border-white/80 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full px-6 py-5 bg-white/80 backdrop-blur-xl rounded-[2rem] text-slate-600 font-bold text-lg shadow-lg hover:shadow-xl border-4 border-white transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <BarChart3 size={18} />
                       Portal
@@ -360,38 +407,16 @@ export default function HomePage() {
 
                   {existingUser && (
                     <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
+                      whileHover={{ scale: 1.1, rotate: 180 }}
+                      whileTap={{ scale: 0.9 }}
                       onClick={resetUser}
-                      className="p-4 bg-white/60 backdrop-blur-md rounded-[2rem] border-4 border-white text-slate-400 hover:text-red-500 hover:border-red-100 transition-all cursor-pointer shadow-lg"
-                      title="Switch User"
+                      className="p-4 bg-white/40 backdrop-blur-md rounded-full border-2 border-white/60 text-slate-400 hover:text-red-500 hover:bg-white hover:border-red-100 transition-all cursor-pointer shadow-md"
+                      title="Switch Explorer"
                     >
                       <RefreshCw size={22} />
                     </motion.button>
                   )}
                 </div>
-
-                {/* Name Input Below Buttons (New Flow) */}
-                {!existingUser ? (
-                  <motion.div 
-                    animate={isShaking ? { x: [-5, 5, -5, 5, 0] } : {}}
-                    transition={{ duration: 0.4 }}
-                    className="w-full flex flex-col items-center gap-3"
-                  >
-                    <div className="relative group w-full max-w-xs">
-                      <input
-                        type="text"
-                        placeholder="Enter your name..."
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleStart()}
-                        className={`w-full px-6 py-4 bg-white/40 backdrop-blur-md rounded-[1.5rem] border-2 outline-none text-base font-bold text-slate-700 shadow-inner transition-all placeholder:text-slate-400 text-center ${
-                          isShaking ? "border-red-400" : "border-white/80 focus:border-[#8B7FDE] focus:bg-white/80"
-                        }`}
-                      />
-                    </div>
-                  </motion.div>
-                ) : null}
               </motion.div>
 
               {/* How It Works */}

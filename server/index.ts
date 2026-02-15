@@ -138,6 +138,7 @@ app.post('/api/tts', async (req, res) => {
   }
 
   const { text, voice_id = 'emily', speed = 0.9 } = req.body;
+  console.log(`🎙️ Server: TTS Request Received for text: "${text?.substring(0, 20)}..." voice: ${voice_id}`);
 
   if (!text || typeof text !== 'string' || text.trim().length === 0) {
     return res.status(400).json({ error: 'Text is required', useFallback: true });
