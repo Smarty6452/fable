@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import axios from 'axios';
 import path from 'path';
-import { AtomsClient, Configuration as SmallestConfig } from 'smallestai';
+import { AtomsClient, Configuration as SmallestConfig } from '@smallest/atoms-sdk';
 import { rateLimit } from 'express-rate-limit';
 
 // Robust env loading - try multiple paths for monorepo compatibility
@@ -437,10 +437,6 @@ app.post('/api/atoms/call-parent', async (req, res) => {
     const sounds = Array.from(new Set(sessions.map(s => s.sound).filter(Boolean)));
     const nearMisses = sessions.filter(s => s.isNearMiss).length;
 
-    // Get or create the AI agent
-    const agentId = await getOrCreateTherapyAgent();
-    const client = await getAtomsClient();
-
     // Generate a highly specific prompt for the call
     const prompt = `
 Role: You are Fable, a cheerful and professional AI speech therapy assistant.
@@ -462,17 +458,25 @@ Script Flow:
 Tone: Warm, concise, encouraging. Do NOT be robotic. Be human-like and quick.
     `;
 
-    // Update agent description/prompt with specific child data
-    try {
-      await client.updateAgent(agentId, {
-        agentDescription: prompt, 
-        voiceId: 'emily',
-      });
-    } catch (e) { console.warn("Agent update warn:", e); }
+    const client = await getAtomsClient();
+
+    // Create a specific agent for this call to ensure context is correct
+    // (Bypassing updateAgent 403 issues by creating fresh ephemeral agents for the demo)
+    const agentResponse = await client.createAgent({
+      name: `Fable Reporter - ${kidName}`,
+      agentDescription: prompt,
+      voiceId: 'emily',
+      slmId: 'be04620a-5c24-4ba2-9856-c0d648e65a0b',
+      maxDuration: 120,
+      initialMessage: `Hi! This is Fable calling about ${kidName}. Do you have a minute for a quick progress update?`,
+    });
+
+    const newAgentId = (agentResponse as any).id || (agentResponse as any).data?.id;
+    console.log(`✅ Created ephemeral agent: ${newAgentId}`);
 
     // Place the call
     const callResponse = await client.startOutboundCall({
-      agentId,
+      agentId: newAgentId,
       phoneNumber,
     });
 
