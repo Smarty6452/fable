@@ -905,7 +905,7 @@ export default function PlayPage() {
             exit={{ opacity: 0, scale: 0.8 }}
             className="flex flex-col items-center w-full max-w-2xl text-center pt-2 relative z-10"
           >
-            {/* Practice Header */}
+            {/* Practice Header with Speed Control */}
             <div className="w-full flex justify-between items-center mb-6 px-4 absolute top-0 left-0 right-0 z-50">
                <motion.button
                  onClick={() => { stopAllAudio(); setGameState("select"); }}
@@ -916,13 +916,22 @@ export default function PlayPage() {
                  <ArrowLeft size={20} className="text-slate-700" />
                </motion.button>
                
-               <div className="bg-white/80 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border-2 border-white/80 flex items-center gap-2">
-                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                 <span className="text-xs font-black uppercase tracking-widest text-slate-500">Live Session</span>
-               </div>
+               <div className="flex items-center gap-3">
+                 {/* Speed Control Toggle */}
+                 <button
+                   onClick={() => setVoiceSpeed(prev => prev === 1 ? 0.75 : prev === 0.75 ? 1.25 : 1)}
+                   className="bg-white/80 backdrop-blur-md px-3 py-2 rounded-2xl shadow-lg border-2 border-white/80 flex items-center gap-2 hover:bg-white transition-all"
+                   title="Voice Speed"
+                 >
+                   <Gauge size={16} className="text-slate-400" />
+                   <span className="text-xs font-black text-slate-600 w-8 text-center">
+                     {voiceSpeed === 1 ? "1.0x" : voiceSpeed === 0.75 ? "0.75x" : "1.25x"}
+                   </span>
+                 </button>
 
-               <div className="bg-white/80 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border-2 border-white/80">
-                 <span className="text-xs font-black text-primary">{xp} XP</span>
+                 <div className="bg-white/80 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border-2 border-white/80">
+                   <span className="text-xs font-black text-primary">{xp} XP</span>
+                 </div>
                </div>
             </div>
 
