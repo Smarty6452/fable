@@ -105,8 +105,8 @@ export default function HomePage() {
       const { playCachedTTS } = await import("@/lib/audio");
       const currentName = localStorage.getItem("kidName") || name;
       const message = forceMessage || (currentName 
-        ? `Welcome back, ${currentName}! your buddy Wolfie is so happy to see you again! Click the button to continue our adventure!`
-        : "Hi there! Welcome to Fable! I'm Wolfie, your new speech therapy buddy! I'm so excited to help you learn and play! Type your name below so we can start!");
+        ? `Hey! Welcome back, ${currentName}! Wolfie missed you so much! Are you ready for another magical voice adventure? Click the button and let's go!`
+        : `Hi there! I'm Wolfie, your magical speech buddy! I can't wait to hear your beautiful voice. Type your name below so we can start our adventure together!`);
       
       // Use 'amx' for Wolfie (Warm Male Voice) for realism
       playCachedTTS(message, "amx"); 
@@ -120,7 +120,7 @@ export default function HomePage() {
     const currentName = localStorage.getItem("kidName");
     if (currentName) {
       import("@/lib/audio").then(({ preloadTTS }) => {
-        const message = `Welcome back, ${currentName}! your buddy Wolfie is so happy to see you again! Click the button to continue our adventure!`;
+        const message = `Hey! Welcome back, ${currentName}! Wolfie missed you so much! Are you ready for another magical voice adventure? Click the button and let's go!`;
         preloadTTS(message, "amx");
       });
     }
@@ -525,11 +525,17 @@ export default function HomePage() {
                   <ChevronDown size={32} className="text-primary/50" />
                 </motion.div>
 
-                <div className="inline-flex items-center gap-2 bg-[#8B7FDE]/8 backdrop-blur-md px-5 py-2 rounded-full border border-[#8B7FDE]/15">
-                  <Sparkles size={13} className="text-[#8B7FDE]" />
-                  <span className="text-[11px] font-black uppercase tracking-widest text-[#8B7FDE]/60">
-                    Powered by Smallest AI Waves
-                  </span>
+                <div className="flex flex-col items-center gap-2 group cursor-default">
+                  <div className="inline-flex items-center gap-3 bg-[#8B7FDE]/5 backdrop-blur-md px-6 py-3 rounded-[1.5rem] border-2 border-white shadow-sm group-hover:shadow-md group-hover:border-[#8B7FDE]/20 transition-all">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Powered by</span>
+                    <div className="h-4 w-[1px] bg-slate-200" />
+                    <span className="text-sm font-black text-[#8B7FDE]">Smallest AI</span>
+                    <div className="h-4 w-[1px] bg-slate-200" />
+                    <span className="text-xs font-bold text-slate-500">Lightning v3.1</span>
+                  </div>
+                  <p className="text-[9px] font-bold text-slate-300 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                    Ultra-Realistic Response Recovery Technology
+                  </p>
                 </div>
                 <Link
                   href="/about"

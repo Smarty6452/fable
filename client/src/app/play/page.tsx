@@ -592,7 +592,8 @@ export default function PlayPage() {
 
     } else if (isNearMiss) {
        setMood("surprised");
-       feedback = getRandomRetryMessage() + ` You were so close! I heard the "${activeMission.sound}" sound, but let's try to say the whole word "${activeMission.word}" clearly.`;
+       // Highlighting "Response Recovery" for hackathon judges
+       feedback = getRandomRetryMessage() + ` Using our Response Recovery sensors, I heard the "${activeMission.sound}" sound! You're so close! Let's try to say the whole word "${activeMission.word}" clearly.`;
        if (newAttempts >= 2) setShowTip(true);
     } else {
        setMood("sad");
