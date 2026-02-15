@@ -841,143 +841,10 @@ export default function PlayPage() {
                  <span className="text-xs font-black text-primary">{xp} XP</span>
                </div>
             </div>
-            <div className="mb-6 relative w-72 h-72 md:w-96 md:h-96 flex items-center justify-center">
-              <BuddyMascot 
-                isListening={isListening} 
-                isSynthesizing={isSynthesizing} 
-                buddyType={selectedBuddy.id}
-                size={300} 
-                mood={mood}
-              />
-              
-              <div className="absolute -bottom-4 right-0 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 border border-white shadow-sm flex items-center gap-1.5 pointer-events-none">
-                <Sparkles size={10} className="text-primary" />
-                Powered by Smallest AI
-              </div>
 
-              {/* Speech Bubble & Feedback */}
-              <AnimatePresence>
-                {isSynthesizing && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="absolute -top-16 left-1/2 -translate-x-1/2 bg-white px-6 py-3 rounded-2xl shadow-xl border-2 border-primary/20 min-w-[200px] z-50 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-8 after:border-transparent after:border-t-white"
-                  >
-                    <div className="flex items-center justify-center gap-3">
-                      <div className="flex gap-1">
-                        {[1, 2, 3].map(i => (
-                          <motion.div
-                            key={i}
-                            className="w-1.5 h-1.5 bg-primary rounded-full"
-                            animate={{ scale: [1, 1.5, 1] }}
-                            transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.2 }}
-                          />
-                        ))}
-                      </div>
-                      <p className="text-sm font-black text-slate-700 uppercase tracking-wider">Buddy is talking...</p>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
 
-            <div className="bg-white/70 backdrop-blur-xl px-10 py-6 rounded-[3rem] border-4 border-white shadow-xl mb-4">
-              <div className="flex items-center justify-center gap-3 mb-1">
-                <h2 className="text-6xl md:text-7xl font-black text-slate-800 tracking-tighter uppercase">{activeMission.word}</h2>
-                <motion.button
-                  onClick={previewWord}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  disabled={isSynthesizing}
-                  className="p-2.5 bg-primary/10 rounded-full hover:bg-primary/20 transition-colors disabled:opacity-40"
-                >
-                  <Play size={20} className="text-primary fill-primary" />
-                </motion.button>
-              </div>
-              <div className="font-black text-primary text-xl uppercase tracking-widest flex items-center justify-center gap-3">
-                <div className="w-8 h-0.5 bg-primary/20 rounded-full" />
-                Say "{activeMission.sound}"
-                <div className="w-8 h-0.5 bg-primary/20 rounded-full" />
-              </div>
-            </div>
-
-            <AnimatePresence>
-              {(showTip || attempts === 0) && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  data-tour="tip-card"
-                  className="mb-4 w-full max-w-md"
-                >
-                  <div className="bg-amber-50/80 backdrop-blur-md px-6 py-4 rounded-2xl border-2 border-amber-200/60 shadow-sm">
-                    <div className="flex items-start gap-3">
-                      <Lightbulb size={20} className="text-amber-500 mt-0.5 shrink-0" />
-                      <div className="text-left text-amber-700">
-                        <p className="text-sm font-bold">{activeMission.tip}</p>
-                        <p className="text-xs mt-1 italic opacity-80">{activeMission.example}</p>
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Mode Toggle */}
-            <div className="flex justify-center gap-4 mb-8 relative z-20">
-              <button 
-                onClick={() => setGameState("practice")} 
-                className={`px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest transition-all ${
-                  gameState === "practice" ? "bg-primary text-white shadow-lg" : "bg-white/50 text-slate-400"
-                }`}
-              >
-                Standard
-              </button>
-              <button 
-                className={`px-6 py-2 rounded-full font-black text-xs uppercase tracking-widest transition-all ${
-                   "bg-white/50 text-slate-400 cursor-not-allowed opacity-50"
-                }`}
-                title="Coming Soon!"
-              >
-                Conversation (Pro)
-              </button>
-            </div>
-
-            {/* Mic Controls */}
-            <div className="flex flex-col items-center gap-4 mt-2 relative z-20">
-              <div className="relative">
-                <AnimatePresence>
-                  {isListening && (
-                    <motion.div
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1.5, opacity: 0.5 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      transition={{ duration: 1, repeat: Infinity }}
-                      className="absolute inset-0 bg-primary rounded-full blur-xl"
-                    />
-                  )}
-                </AnimatePresence>
-                
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={toggleListening}
-                  disabled={isSynthesizing}
-                  className={`w-28 h-28 rounded-full flex items-center justify-center shadow-2xl transition-all border-[6px] relative z-10 ${
-                    isListening
-                      ? "bg-red-500 border-red-200 text-white"
-                      : "bg-gradient-to-br from-primary to-orange-500 border-white text-white hover:shadow-orange-500/50"
-                  } ${isSynthesizing ? "opacity-50 cursor-not-allowed grayscale" : ""}`}
-                >
-                  {isListening ? <MicOff size={40} /> : <Mic size={40} fill="currentColor" />}
-                </motion.button>
-              </div>
-
-              <div className="h-8">
-                <AnimatePresence mode="wait">
-                  {/* Active Practice Area */}
-            <div className="relative mb-8 flex flex-col items-center justify-center">
+            {/* Active Practice Area */}
+            <div className="relative mb-8 flex flex-col items-center justify-center mt-12 w-full">
                <BuddyMascot 
                 isListening={isListening} 
                 isSynthesizing={isSynthesizing} 
@@ -986,14 +853,14 @@ export default function PlayPage() {
                 mood={mood}
               />
               
-              <div className="absolute -bottom-4 right-0 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 border border-white shadow-sm flex items-center gap-1.5 pointer-events-none">
+              <div className="absolute -bottom-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 border border-white shadow-sm flex items-center gap-1.5 pointer-events-none">
                 <div className={`w-1.5 h-1.5 rounded-full ${isListening ? "bg-red-500 animate-pulse" : "bg-slate-300"}`} />
                 {isListening ? "Listening..." : "Ready"}
               </div>
             </div>
 
             {/* Live Transcript Feedback */}
-            <div className="h-8 mb-4 flex items-center justify-center pointer-events-none">
+            <div className="h-12 mb-4 flex items-center justify-center w-full pointer-events-none">
               <AnimatePresence mode="wait">
                 {transcript ? (
                   <motion.span 
@@ -1001,13 +868,16 @@ export default function PlayPage() {
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -5 }}
-                    className="text-2xl font-black text-slate-800 bg-white/50 backdrop-blur px-4 py-1 rounded-xl"
+                    className="text-xl md:text-2xl font-black text-slate-800 bg-white/50 backdrop-blur px-6 py-2 rounded-2xl shadow-sm border border-white/50"
                   >
                     "{transcript}"
                   </motion.span>
                 ) : isListening ? (
                   <motion.span
+                    key="listening"
+                    initial={{ opacity: 0 }}
                     animate={{ opacity: [0.4, 1, 0.4] }}
+                    exit={{ opacity: 0 }}
                     transition={{ duration: 1.5, repeat: Infinity }}
                     className="text-sm font-bold text-slate-400 uppercase tracking-widest"
                   >
@@ -1018,72 +888,67 @@ export default function PlayPage() {
             </div>
 
             {/* Controls */}
-            <div className="flex flex-col items-center gap-6 w-full max-w-sm mx-auto z-20">
+            <div className="flex flex-col items-center gap-6 w-full max-w-sm mx-auto z-20 relative">
                {!success ? (
                  <>
-                   {/* Mic Button */}
-                   <div className="relative group">
-                     {isListening && (
-                       <>
-                         <motion.div 
-                           animate={{ scale: [1, 1.5], opacity: [0.5, 0] }}
-                           transition={{ duration: 1.5, repeat: Infinity }}
-                           className="absolute inset-0 bg-red-400 rounded-full z-0"
-                         />
-                         <motion.div 
-                           animate={{ scale: [1, 1.25], opacity: [0.5, 0] }}
-                           transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
-                           className="absolute inset-0 bg-red-400 rounded-full z-0"
-                         />
-                       </>
-                     )}
-                     
+                   {/* Mic Button & Actions */}
+                   <div className="flex items-center gap-6 md:gap-8 justify-center w-full">
                      <motion.button
-                       whileHover={{ scale: 1.05 }}
-                       whileTap={{ scale: 0.95 }}
-                       onClick={startListening}
-                       className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center shadow-xl border-4 transition-all ${
-                         isListening 
-                           ? "bg-red-500 border-red-100 shadow-red-500/30" 
-                           : "bg-white border-white shadow-slate-200 hover:border-primary/20"
-                       }`}
-                     >
-                       {isListening ? (
-                         <div className="bg-white p-4 rounded-xl">
-                            <div className="w-6 h-6 bg-red-500 rounded-sm" />
-                         </div>
-                       ) : (
-                         <Mic size={40} className="text-slate-700 ml-0.5" />
-                       )}
-                     </motion.button>
-                     
-                     <div className="absolute -bottom-8 left-0 right-0 text-center">
-                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                         {isListening ? "Tap to Stop" : "Tap to Speak"}
-                       </span>
-                     </div>
-                   </div>
-
-                   {/* Helper Buttons */}
-                   <div className="flex gap-4 mt-4">
-                     <motion.button
-                       whileHover={{ scale: 1.05 }}
-                       whileTap={{ scale: 0.95 }}
+                       whileHover={{ scale: 1.1 }}
+                       whileTap={{ scale: 0.9 }}
                        onClick={previewWord}
                        className="p-4 bg-white/60 backdrop-blur-md rounded-2xl border-2 border-white shadow-sm hover:bg-white hover:shadow-md transition-all group"
                        title="Hear Pronunciation"
                      >
                        <Volume2 size={24} className="text-slate-400 group-hover:text-primary transition-colors" />
                      </motion.button>
-                     
+
+                     <div className="relative group">
+                       {isListening && (
+                         <>
+                           <motion.div 
+                             animate={{ scale: [1, 1.4], opacity: [0.5, 0] }}
+                             transition={{ duration: 1.5, repeat: Infinity }}
+                             className="absolute inset-0 bg-red-400 rounded-full z-0"
+                           />
+                           <motion.div 
+                             animate={{ scale: [1, 1.2], opacity: [0.6, 0] }}
+                             transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
+                             className="absolute inset-0 bg-red-400 rounded-full z-0"
+                           />
+                         </>
+                       )}
+                       
+                       <motion.button
+                         whileHover={{ scale: 1.05 }}
+                         whileTap={{ scale: 0.95 }}
+                         onClick={startListening}
+                         className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center shadow-xl border-4 transition-all ${
+                           isListening 
+                             ? "bg-red-500 border-red-100 shadow-red-500/30" 
+                             : "bg-white border-white shadow-slate-200 hover:border-primary/20"
+                         }`}
+                       >
+                         {isListening ? (
+                           <div className="bg-white p-4 rounded-xl shadow-inner">
+                              <div className="w-5 h-5 bg-red-500 rounded-sm" />
+                           </div>
+                         ) : (
+                           <Mic size={36} className="text-slate-700 ml-0.5" />
+                         )}
+                       </motion.button>
+                     </div>
+
                      <motion.button
-                       whileHover={{ scale: 1.05 }}
-                       whileTap={{ scale: 0.95 }}
+                       whileHover={{ scale: 1.1 }}
+                       whileTap={{ scale: 0.9 }}
                        onClick={() => setShowTip(!showTip)}
-                       className="p-4 bg-white/60 backdrop-blur-md rounded-2xl border-2 border-white shadow-sm hover:bg-white hover:shadow-md transition-all group"
+                       className={`p-4 backdrop-blur-md rounded-2xl border-2 border-white shadow-sm hover:shadow-md transition-all group ${
+                         showTip ? "bg-amber-100 border-amber-200" : "bg-white/60 hover:bg-white"
+                       }`}
                        title="Show Hint"
                      >
-                       <Lightbulb size={24} className="text-slate-400 group-hover:text-amber-400 transition-colors" />
+                       <Lightbulb size={24} className={`${showTip ? "text-amber-500" : "text-slate-400 group-hover:text-amber-400"} transition-colors`} />
                      </motion.button>
                    </div>
                  </>
@@ -1106,7 +971,7 @@ export default function PlayPage() {
                         setSuccess(false);
                         setMood("happy");
                      }}
-                     className="w-full max-w-xs py-4 bg-white rounded-2xl font-black text-slate-700 shadow-lg border-2 border-white flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors"
+                     className="w-full max-w-xs py-4 bg-white rounded-2xl font-black text-slate-700 shadow-lg border-2 border-white flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors cursor-pointer"
                    >
                      Next Mission <ArrowRight size={20} />
                    </motion.button>
@@ -1120,7 +985,7 @@ export default function PlayPage() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className="mt-8 bg-amber-50/90 backdrop-blur-md px-6 py-4 rounded-2xl border-2 border-amber-100 text-center max-w-sm shadow-sm"
+                  className="mt-8 bg-amber-50/90 backdrop-blur-md px-6 py-4 rounded-2xl border-2 border-amber-100 text-center max-w-sm shadow-sm z-30 relative"
                 >
                   <div className="flex items-center justify-center gap-2 mb-1">
                     <Lightbulb size={16} className="text-amber-500" />
@@ -1133,12 +998,11 @@ export default function PlayPage() {
                 </motion.div>
               )}
             </AnimatePresence>
-
             {speechError && !isListening && !success && (
               <motion.div 
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="mt-6 bg-red-50 text-red-500 px-4 py-2 rounded-xl text-sm font-bold border border-red-100 flex items-center gap-2"
+                className="mt-6 bg-red-50 text-red-500 px-4 py-2 rounded-xl text-sm font-bold border border-red-100 flex items-center gap-2 z-30 relative"
               >
                 {speechError}
               </motion.div>
