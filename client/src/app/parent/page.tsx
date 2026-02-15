@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, Calendar, CheckCircle2, XCircle, TrendingUp,
   UserRound, Target, Zap, BarChart3, Star, Volume2,
-  Clock, Award, Flame, BookOpen,
+  Clock, Award, Flame, BookOpen, Phone, PhoneCall, Loader2,
 } from "lucide-react";
 import Link from "next/link";
 import InteractiveBackground from "@/components/InteractiveBackground";
@@ -31,6 +31,34 @@ export default function ParentDashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "sounds" | "history">("overview");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [callStatus, setCallStatus] = useState<"idle" | "calling" | "success" | "error">("idle");
+  const [callMessage, setCallMessage] = useState("");
+
+  const triggerParentCall = async () => {
+    if (!phoneNumber.trim()) return;
+    setCallStatus("calling");
+    setCallMessage("");
+    try {
+      const kidName = localStorage.getItem("kidName") || "Little Explorer";
+      const res = await fetch(`${API_BASE}/atoms/call-parent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumber: phoneNumber.trim(), kidName }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCallStatus("success");
+        setCallMessage(data.message || "AI is calling you now!");
+      } else {
+        setCallStatus("error");
+        setCallMessage(data.error || "Could not place call");
+      }
+    } catch {
+      setCallStatus("error");
+      setCallMessage("Network error - check server connection");
+    }
+  };
 
   useEffect(() => {
     fetch(`${API_BASE}/stats`)
@@ -384,6 +412,64 @@ export default function ParentDashboard() {
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {/* AI Phone Call Section - Atoms Integration */}
+            <motion.div variants={fadeUp} className="bg-gradient-to-br from-purple-50 to-indigo-50/50 backdrop-blur-xl rounded-[2rem] border-4 border-white shadow-lg p-6">
+              <div className="flex items-start gap-4">
+                <div className="bg-gradient-to-br from-primary to-purple-600 p-4 rounded-2xl text-white shrink-0">
+                  <PhoneCall size={28} />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-black text-slate-800 mb-1">AI Progress Report Call</h3>
+                  <p className="text-sm text-slate-500 font-bold mb-4">
+                    Our AI buddy will <span className="text-primary font-black">call you</span> with a personalized
+                    progress report about your child's speech therapy practice. Powered by Smallest AI Atoms.
+                  </p>
+
+                  <div className="flex gap-3 items-center">
+                    <div className="relative flex-1 max-w-xs">
+                      <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="tel"
+                        placeholder="+1 (555) 123-4567"
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-white rounded-2xl border-2 border-white focus:border-primary outline-none font-bold text-slate-700 shadow-sm"
+                      />
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={triggerParentCall}
+                      disabled={!phoneNumber.trim() || callStatus === "calling"}
+                      className="px-6 py-3 bg-gradient-to-r from-primary to-purple-600 rounded-2xl text-white font-black text-sm shadow-lg border-2 border-white disabled:opacity-40 flex items-center gap-2"
+                    >
+                      {callStatus === "calling" ? (
+                        <><Loader2 size={16} className="animate-spin" /> Calling...</>
+                      ) : (
+                        <><PhoneCall size={16} /> Call Me</>
+                      )}
+                    </motion.button>
+                  </div>
+
+                  <AnimatePresence>
+                    {callMessage && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        className={`mt-3 text-sm font-bold px-4 py-2 rounded-xl ${
+                          callStatus === "success" ? "bg-green-50 text-green-600 border border-green-200" :
+                          callStatus === "error" ? "bg-red-50 text-red-500 border border-red-200" : ""
+                        }`}
+                      >
+                        {callStatus === "success" && "📞 "}{callMessage}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </div>

@@ -6,9 +6,9 @@ import { Toaster } from "sonner";
 const outfit = Outfit({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "TalkyBuddy - AI Speech Therapy for Kids",
-  description: "Transform speech therapy into a fun AI-powered adventure. Free, accessible pronunciation practice for children aged 3-8, powered by Smallest AI Waves.",
-  keywords: ["speech therapy", "kids", "AI", "pronunciation", "TTS", "Smallest AI"],
+  title: "Waggle - Speech Practice That Plays Back",
+  description: "Transform speech therapy into a fun AI-powered adventure with Waggle. Free, accessible pronunciation practice for children aged 3-8, powered by Smallest AI.",
+  keywords: ["speech therapy", "kids", "AI", "pronunciation", "TTS", "Smallest AI", "Waggle"],
 };
 
 export default function RootLayout({

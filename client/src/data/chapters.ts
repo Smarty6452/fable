@@ -49,9 +49,8 @@ export const CHAPTERS: Chapter[] = [
     level: 4,
     emoji: "🎯",
     unlockXp: 400,
-    missions: [], // Will be added later
-    isLocked: true,
-    comingSoon: true,
+    missions: ["13", "14", "15", "16"], // Star, Frog, Snail, Clap
+    isLocked: false,
   },
   {
     id: "chapter-5",
@@ -60,9 +59,8 @@ export const CHAPTERS: Chapter[] = [
     level: 5,
     emoji: "🧙",
     unlockXp: 600,
-    missions: [],
-    isLocked: true,
-    comingSoon: true,
+    missions: ["17", "18", "19", "20"], // Butterfly, Dinosaur, Elephant, Helicopter
+    isLocked: false,
   },
   {
     id: "chapter-6",
@@ -71,9 +69,8 @@ export const CHAPTERS: Chapter[] = [
     level: 6,
     emoji: "📚",
     unlockXp: 850,
-    missions: [],
-    isLocked: true,
-    comingSoon: true,
+    missions: ["21", "22"], // Thank you, Please help
+    isLocked: false,
   },
   {
     id: "chapter-7",

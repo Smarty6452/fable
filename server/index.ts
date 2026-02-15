@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import axios from 'axios';
 import path from 'path';
+import { AtomsClient, Configuration as SmallestConfig } from 'smallestai';
 
 // Robust env loading - try multiple paths for monorepo compatibility
 const envPaths = [
@@ -241,12 +242,140 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// ============ ATOMS INTEGRATION - AI Phone Calls ============
+
+let cachedAgentId: string | null = null;
+
+async function getAtomsClient() {
+  const apiKey = process.env.SMALLEST_AI_API_KEY;
+  if (!apiKey) throw new Error('SMALLEST_AI_API_KEY not configured');
+  const config = new SmallestConfig({ accessToken: apiKey });
+  return new AtomsClient(config);
+}
+
+async function getOrCreateTherapyAgent(): Promise<string> {
+  if (cachedAgentId) return cachedAgentId;
+
+  const client = await getAtomsClient();
+
+  // Check for existing agent first
+  try {
+    const agents = await client.getAgents();
+    const existing = (agents.data as any)?.find?.((a: any) =>
+      a.name === 'TalkyBuddy Progress Reporter'
+    );
+    if (existing) {
+      cachedAgentId = existing.id || existing._id;
+      console.log(`✅ Found existing Atoms agent: ${cachedAgentId}`);
+      return cachedAgentId!;
+    }
+  } catch (_) { /* proceed to create */ }
+
+  const response = await client.createAgent({
+    name: 'TalkyBuddy Progress Reporter',
+    description: 'AI speech therapy assistant that calls parents with progress updates on their child\'s pronunciation practice. Be warm, encouraging, and specific about which sounds the child is improving on.',
+    language: { enabled: 'en' as any, switching: false },
+    synthesizer: {
+      voiceConfig: { model: 'waves_lightning_large' as any, voiceId: 'emily' },
+      speed: 1.0,
+      consistency: 0.5,
+      similarity: 0,
+      enhancement: 1,
+    },
+    slmModel: 'electron-v1' as any,
+  });
+
+  cachedAgentId = (response as any).data;
+  console.log(`✅ Created Atoms agent: ${cachedAgentId}`);
+  return cachedAgentId!;
+}
+
+// Get agent status
+app.get('/api/atoms/status', async (_req, res) => {
+  try {
+    const client = await getAtomsClient();
+    const agentId = await getOrCreateTherapyAgent();
+    res.json({ success: true, agentId, configured: true });
+  } catch (error: any) {
+    res.json({ success: false, configured: false, error: error.message });
+  }
+});
+
+// Trigger AI phone call to parent with progress report
+app.post('/api/atoms/call-parent', async (req, res) => {
+  try {
+    const { phoneNumber, kidName } = req.body;
+
+    if (!phoneNumber || !kidName) {
+      return res.status(400).json({ error: 'Phone number and kid name required' });
+    }
+
+    // Fetch kid's stats for context
+    const sessions = await Session.find({ kidName }).sort({ createdAt: -1 }).limit(50);
+    const total = sessions.length;
+    const successes = sessions.filter(s => s.success).length;
+    const successRate = total > 0 ? Math.round((successes / total) * 100) : 0;
+    const sounds = Array.from(new Set(sessions.map(s => s.sound).filter(Boolean)));
+    const nearMisses = sessions.filter(s => s.isNearMiss).length;
+
+    // Get or create the AI agent
+    const agentId = await getOrCreateTherapyAgent();
+    const client = await getAtomsClient();
+
+    // Update agent description with current child data before calling
+    try {
+      await client.updateAgent(agentId, {
+        description: `You are calling the parent of ${kidName} with a speech therapy progress report.
+Stats: ${total} sessions, ${successRate}% success rate, ${nearMisses} near-misses.
+Sounds practiced: ${sounds.join(', ') || 'None yet'}.
+${successRate >= 70 ? `${kidName} is doing great! Highlight their progress.` : `${kidName} needs more practice. Be encouraging and suggest specific exercises.`}
+Keep the call brief (under 2 minutes). Be warm and professional.`,
+      });
+    } catch (_) { /* agent update is best-effort */ }
+
+    // Place the call
+    const callResponse = await client.startOutboundCall({
+      agentId,
+      phoneNumber,
+    });
+
+    const conversationId = (callResponse as any).data?.conversationId || (callResponse as any).conversationId;
+
+    console.log(`📞 Atoms call placed to ${phoneNumber} for ${kidName} | conversation: ${conversationId}`);
+
+    res.json({
+      success: true,
+      conversationId,
+      message: `AI is calling ${phoneNumber} with ${kidName}'s progress report!`,
+    });
+
+  } catch (error: any) {
+    console.error('❌ Atoms call error:', error.response?.data || error.message);
+    res.status(500).json({
+      error: error.message,
+      hint: 'Atoms phone call feature - ensure API key has Atoms access',
+    });
+  }
+});
+
+// Check call status
+app.get('/api/atoms/call-status/:conversationId', async (req, res) => {
+  try {
+    const client = await getAtomsClient();
+    const logs = await client.getConversationLogs(req.params.conversationId);
+    res.json({ success: true, data: (logs as any).data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     message: 'TalkyBuddy Server Running',
     ttsConfigured: !!process.env.SMALLEST_AI_API_KEY,
+    atomsEnabled: true,
     dbConnected: mongoose.connection.readyState === 1,
     timestamp: new Date().toISOString(),
   });
