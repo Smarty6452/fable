@@ -145,27 +145,52 @@ export default function HomePage() {
   const [isShaking, setIsShaking] = useState(false);
 
   const handleStart = async () => {
+    // 1. Validation for new users
     if (!existingUser && !name.trim()) {
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 500);
       return;
     }
 
-    if (!existingUser && name.trim()) {
-      localStorage.setItem("kidName", name.trim());
-      // Play a quick confirmation and WAIT for it to finish
-      await playWelcome(`Great to meet you, ${name.trim()}! Let's go!`);
+    // 2. Logic for existing local user
+    if (existingUser) {
+      // Play a warm return greeting and WAIT
+      await playWelcome(`Perfect! Welcome back ${existingUser}! Wolfie is so ready to continue our adventure. Let's go!`);
       
       setIsNavigating(true);
       setTimeout(() => {
         window.location.href = "/play";
       }, 500);
-    } else if (existingUser) {
+      return;
+    }
+
+    // 3. Logic for new/returning name entry
+    if (name.trim()) {
+      const cleanName = name.trim();
+      localStorage.setItem("kidName", cleanName);
+      
+      try {
+        // QUICK CHECK: Is this a returning user (name in DB)?
+        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+        const res = await fetch(`${API_BASE}/stats?kid=${cleanName}`);
+        const stats = await res.json();
+        
+        if (stats.success && stats.total > 0) {
+          // Emotional "I remember you!" message
+          await playWelcome(`Oh, Wolfie remembers you, ${cleanName}! Welcome back! I'm so happy you're here to practice again!`);
+        } else {
+          // Magical first-time meeting message
+          await playWelcome(`Hi ${cleanName}! I'm Wolfie, your magical speech buddy! I am so happy to meet you. Let's start our first adventure together!`);
+        }
+      } catch (e) {
+        // Fallback for offline/error
+        await playWelcome(`Great to meet you, ${cleanName}! Let's go!`);
+      }
+
       setIsNavigating(true);
-      // Brief delay for the loader to feel natural
       setTimeout(() => {
         window.location.href = "/play";
-      }, 300);
+      }, 500);
     }
   };
 
