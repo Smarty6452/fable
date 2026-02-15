@@ -207,7 +207,7 @@ export default function GuidedTour({ steps, onComplete, storageKey }: GuidedTour
 export const HOME_TOUR_STEPS: TourStep[] = [
   {
     target: "[data-tour='start-button']",
-    title: "Welcome to TalkyBuddy! 🎉",
+    title: "Welcome to Waggle! 🎉",
     content: "Click here to begin your speech adventure with Wolfie! We'll practice sounds together.",
     position: "bottom",
   },

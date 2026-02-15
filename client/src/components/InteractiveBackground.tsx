@@ -79,31 +79,33 @@ export default function InteractiveBackground() {
         }}
       />
 
-      {/* Parallax blobs */}
+      {/* Richer Gradients */}
       <motion.div
-        className="absolute w-[500px] h-[500px] rounded-full blur-[120px] bg-[#FFB347]/20"
-        style={{ top: "-8%", left: "-8%", x: blob1X, y: blob1Y }}
-        animate={{ scale: [1, 1.12, 1] }}
-        transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div
-        className="absolute w-[600px] h-[600px] rounded-full blur-[120px] bg-[#B19CD9]/18"
-        style={{ bottom: "-12%", right: "-8%", x: blob2X, y: blob2Y }}
-        animate={{ scale: [1, 1.15, 1] }}
+        className="absolute w-[800px] h-[800px] rounded-full blur-[140px] bg-gradient-to-br from-[#FFD166]/20 to-[#FFD166]/5"
+        style={{ top: "-15%", left: "-10%", x: blob1X, y: blob1Y }}
+        animate={{ scale: [1, 1.15, 1], rotate: [0, 90, 0] }}
         transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
       />
       <motion.div
-        className="absolute w-[380px] h-[380px] rounded-full blur-[100px] bg-[#77DD77]/15"
-        style={{ top: "25%", right: "12%", x: blob3X, y: blob3Y }}
-        animate={{ scale: [1, 1.1, 1] }}
-        transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute w-[700px] h-[700px] rounded-full blur-[140px] bg-gradient-to-tl from-[#A0E7E5]/20 to-[#B4F8C8]/10"
+        style={{ bottom: "-10%", right: "-10%", x: blob2X, y: blob2Y }}
+        animate={{ scale: [1, 1.2, 1], rotate: [0, -60, 0] }}
+        transition={{ duration: 30, repeat: Infinity, ease: "easeInOut" }}
       />
-      <motion.div
-        className="absolute w-[420px] h-[420px] rounded-full blur-[100px] bg-[#FFB8C6]/15"
-        style={{ bottom: "15%", left: "8%", x: blob4X, y: blob4Y }}
-        animate={{ scale: [1, 1.12, 1] }}
-        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
-      />
+      
+      {/* Animated Clouds */}
+      {[1, 2, 3].map((i) => (
+        <motion.div
+          key={`cloud-${i}`}
+          className="absolute text-white opacity-40 pointer-events-none"
+          initial={{ x: "-10%" }}
+          animate={{ x: "110%" }}
+          transition={{ duration: 40 + i * 15, repeat: Infinity, ease: "linear", delay: i * -10 }}
+          style={{ top: `${15 + i * 20}%`, fontSize: `${40 + i * 20}px` }}
+        >
+          ☁️
+        </motion.div>
+      ))}
 
       {/* Floating playful shapes */}
       {floatingShapes.map((shape, i) => (
@@ -112,9 +114,9 @@ export default function InteractiveBackground() {
           className="absolute pointer-events-none"
           style={{ left: shape.x, top: shape.y }}
           animate={{
-            y: [0, -20, 0],
-            rotate: [0, shape.type === "star" ? 72 : 360, shape.type === "star" ? 0 : 720],
-            scale: [1, 1.15, 1],
+            y: [0, -30, 0],
+            rotate: [0, shape.type === "star" ? 180 : 360, shape.type === "star" ? 0 : 720],
+            scale: [1, 1.2, 1],
           }}
           transition={{
             duration: shape.duration,
@@ -130,7 +132,8 @@ export default function InteractiveBackground() {
                 width: shape.size,
                 height: shape.size,
                 borderColor: shape.color,
-                opacity: 0.25,
+                opacity: 0.4,
+                boxShadow: `0 0 10px ${shape.color}40` 
               }}
             />
           ) : (
@@ -139,7 +142,7 @@ export default function InteractiveBackground() {
               height={shape.size}
               viewBox="0 0 24 24"
               fill="none"
-              style={{ opacity: 0.2 }}
+              style={{ opacity: 0.3 }}
             >
               <path
                 d="M12 2L14.5 9L22 9.5L16.5 14L18.5 22L12 17.5L5.5 22L7.5 14L2 9.5L9.5 9L12 2Z"
@@ -150,44 +153,71 @@ export default function InteractiveBackground() {
         </motion.div>
       ))}
 
-      {/* Wavy bottom decoration */}
-      <svg
-        className="absolute bottom-0 left-0 right-0 w-full opacity-[0.04]"
-        viewBox="0 0 1440 120"
-        preserveAspectRatio="none"
-        style={{ height: 80 }}
-      >
-        <path
-          d="M0 60 Q 360 0, 720 60 T 1440 60 V 120 H 0 Z"
-          fill="#8B7FDE"
-        />
-      </svg>
+      {/* Background Music Player */}
+      <BackgroundMusic />
+    </div>
+  );
+}
 
-      {/* Floating particles */}
-      <div className="absolute inset-0 pointer-events-none">
-        {particles.map((p, i) => (
-          <motion.div
-            key={i}
-            className="absolute rounded-full"
-            style={{
-              left: p.x,
-              width: p.size,
-              height: p.size,
-              backgroundColor: i % 4 === 0 ? "rgba(255,179,71,0.35)" : i % 4 === 1 ? "rgba(177,156,217,0.3)" : i % 4 === 2 ? "rgba(119,221,119,0.3)" : "rgba(255,184,198,0.3)",
-            }}
-            animate={{
-              y: [p.y, "-5%"],
-              opacity: [0, 0.7, 0],
-            }}
-            transition={{
-              duration: p.duration,
-              repeat: Infinity,
-              delay: p.delay,
-              ease: "linear",
-            }}
-          />
-        ))}
-      </div>
+function BackgroundMusic() {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(0.3);
+  const audioRef = useState(() => typeof Audio !== "undefined" ? new Audio("/happy-tunes.mp3") : null)[0];
+
+  useEffect(() => {
+    if (audioRef) {
+      audioRef.loop = true;
+      audioRef.volume = volume;
+    }
+    return () => {
+      audioRef?.pause();
+    };
+  }, [audioRef]);
+
+  useEffect(() => {
+    if (audioRef) {
+      if (isPlaying) {
+        audioRef.play().catch(() => setIsPlaying(false)); // Handle autoplay block
+      } else {
+        audioRef.pause();
+      }
+    }
+  }, [isPlaying, audioRef]);
+
+  // Handle volume change
+  useEffect(() => {
+    if (audioRef) audioRef.volume = volume;
+  }, [volume, audioRef]);
+
+  return (
+    <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 bg-white/80 backdrop-blur-md p-2 pl-4 rounded-full border border-white/50 shadow-lg transition-all hover:bg-white">
+      <button 
+        onClick={() => setIsPlaying(!isPlaying)}
+        className="text-slate-500 hover:text-primary transition-colors"
+        title={isPlaying ? "Pause Music" : "Play Music"}
+      >
+        {isPlaying ? (
+          <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
+            🎵
+          </motion.div>
+        ) : (
+           <span className="opacity-50 grayscale">🎵</span>
+        )}
+      </button>
+      
+      {isPlaying && (
+        <motion.input
+          initial={{ width: 0, opacity: 0 }}
+          animate={{ width: 60, opacity: 1 }}
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          value={volume}
+          onChange={(e) => setVolume(parseFloat(e.target.value))}
+          className="h-1 accent-primary cursor-pointer"
+        />
+      )}
     </div>
   );
 }

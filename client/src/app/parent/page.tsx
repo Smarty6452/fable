@@ -123,7 +123,7 @@ export default function ParentDashboard() {
             <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">Progress Report</h1>
             <p className="text-sm text-slate-400 font-bold flex items-center gap-1.5 justify-end">
               <Volume2 size={14} className="text-primary" />
-              TalkyBuddy Analytics
+              Waggle Analytics
             </p>
           </div>
         </motion.header>
@@ -431,9 +431,15 @@ export default function ParentDashboard() {
                       <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="tel"
-                        placeholder="+1 (555) 123-4567"
+                        placeholder="+1 555 123 4567"
                         value={phoneNumber}
-                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        onChange={(e) => {
+                          setPhoneNumber(e.target.value);
+                          if (callStatus !== "idle" && callStatus !== "calling") {
+                            setCallStatus("idle");
+                            setCallMessage("");
+                          }
+                        }}
                         className="w-full pl-10 pr-4 py-3 bg-white rounded-2xl border-2 border-white focus:border-primary outline-none font-bold text-slate-700 shadow-sm"
                       />
                     </div>
@@ -446,11 +452,17 @@ export default function ParentDashboard() {
                     >
                       {callStatus === "calling" ? (
                         <><Loader2 size={16} className="animate-spin" /> Calling...</>
+                      ) : callStatus === "success" ? (
+                        <><PhoneCall size={16} /> Call Again</>
                       ) : (
                         <><PhoneCall size={16} /> Call Me</>
                       )}
                     </motion.button>
                   </div>
+
+                  <p className="text-xs text-slate-400 font-bold mt-2">
+                    Use international format with country code (e.g. +1 for US, +91 for India)
+                  </p>
 
                   <AnimatePresence>
                     {callMessage && (

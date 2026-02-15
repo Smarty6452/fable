@@ -122,7 +122,7 @@ export default function HomePage() {
             <Volume2 size={22} />
           </motion.div>
           <span className="text-xl font-black text-slate-800 tracking-tight group-hover:text-[#8B7FDE] transition-colors">
-            Waggle
+            Lumora
           </span>
         </Link>
 
@@ -406,7 +406,7 @@ export default function HomePage() {
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       {stat.icon}
                       <span className="text-xl font-black text-slate-800 tracking-tight group-hover:text-[#8B7FDE] transition-colors">
-            Waggle
+            Lumora
           </span><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{stat.label}</span></div>
                   </motion.div>
                 ))}
@@ -432,7 +432,7 @@ export default function HomePage() {
                   href="/about"
                   className="text-sm font-bold text-slate-400 hover:text-[#8B7FDE] transition-colors underline underline-offset-4"
                 >
-                  About Waggle
+                  About Lumora
                 </Link>
               </motion.div>
             </motion.div>

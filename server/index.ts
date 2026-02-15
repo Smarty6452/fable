@@ -262,7 +262,7 @@ async function getOrCreateTherapyAgent(): Promise<string> {
   try {
     const agents = await client.getAgents();
     const existing = (agents.data as any)?.find?.((a: any) =>
-      a.name === 'TalkyBuddy Progress Reporter'
+      a.name === 'Waggle Progress Reporter' || a.name === 'TalkyBuddy Progress Reporter'
     );
     if (existing) {
       cachedAgentId = existing.id || existing._id;
@@ -272,15 +272,18 @@ async function getOrCreateTherapyAgent(): Promise<string> {
   } catch (_) { /* proceed to create */ }
 
   const response = await client.createAgent({
-    name: 'TalkyBuddy Progress Reporter',
+    name: 'Waggle Progress Reporter',
     description: 'AI speech therapy assistant that calls parents with progress updates on their child\'s pronunciation practice. Be warm, encouraging, and specific about which sounds the child is improving on.',
-    language: { enabled: 'en' as any, switching: false },
-    synthesizer: {
-      voiceConfig: { model: 'waves_lightning_large' as any, voiceId: 'emily' },
-      speed: 1.0,
-      consistency: 0.5,
-      similarity: 0,
-      enhancement: 1,
+    language: {
+      enabled: 'en' as any,
+      switching: false,
+      synthesizer: {
+        voiceConfig: { model: 'waves_lightning_large' as any, voiceId: 'emily' },
+        speed: 1.0,
+        consistency: 0.5,
+        similarity: 0,
+        enhancement: 1,
+      },
     },
     slmModel: 'electron-v1' as any,
   });
@@ -373,7 +376,7 @@ app.get('/api/atoms/call-status/:conversationId', async (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
-    message: 'TalkyBuddy Server Running',
+    message: 'Waggle Server Running',
     ttsConfigured: !!process.env.SMALLEST_AI_API_KEY,
     atomsEnabled: true,
     dbConnected: mongoose.connection.readyState === 1,

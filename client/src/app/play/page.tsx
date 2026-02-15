@@ -120,7 +120,7 @@ export default function PlayPage() {
       if (localStorage.getItem("talkybuddy-notifications") === null) {
         addNotification({
           type: "reward",
-          title: "Welcome to TalkyBuddy! 🎁",
+          title: "Welcome to Waggle! 🎁",
           message: "We're so glad you're here! Start a mission to earn your first XP points!",
         });
       }
@@ -357,6 +357,10 @@ export default function PlayPage() {
     recognition.onend = () => {
       setIsListening(false);
       recognitionRef.current = null;
+      // Stop MediaRecorder if still running when recognition ends
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
     };
 
     try {
@@ -378,8 +382,9 @@ export default function PlayPage() {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
           const audioUrl = URL.createObjectURL(audioBlob);
           setRecordedAudioUrl(audioUrl);
-          
-          // Here you would upload audioBlob to server if storing
+
+          // Release mic - stop all tracks so browser mic indicator turns off
+          stream.getTracks().forEach(track => track.stop());
         };
 
         mediaRecorder.start();
@@ -649,7 +654,7 @@ export default function PlayPage() {
 
             <div className="flex flex-wrap justify-center gap-3 mb-10">
               {CHAPTERS.map(chapter => {
-                const isLocked = chapter.unlockXp > xp && chapter.id !== "chapter-1";
+                const isLocked = chapter.comingSoon || chapter.missions.length === 0 || (chapter.unlockXp > xp && chapter.id !== "chapter-1");
                 const isSelected = selectedChapterId === chapter.id;
                 return (
                   <motion.button

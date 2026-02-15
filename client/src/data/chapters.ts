@@ -1,4 +1,4 @@
-// Chapter-based progression system for TalkyBuddy
+// Chapter-based progression system for Waggle
 export interface Chapter {
   id: string;
   title: string;
