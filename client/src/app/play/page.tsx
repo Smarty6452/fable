@@ -199,6 +199,13 @@ export default function PlayPage() {
   // ... (previous effects)
 
   const startPractice = (mission: Mission) => {
+    // Unlock Audio Context for iOS/Chrome autoplay policies
+    const unlockAudio = () => {
+      const audio = new Audio();
+      audio.play().catch(() => {});
+    };
+    unlockAudio();
+
     setActiveMission(mission);
     setGameState("practice");
     setTranscript("");
@@ -315,46 +322,83 @@ export default function PlayPage() {
   };
 
   const startListening = () => {
+    // Check browser support
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) {
       toast.error("Your browser doesn't support voice! Try Chrome.");
       return;
     }
+
+    if (isListening) {
+      // Toggle OFF logic for push-to-talk
+      if (recognitionRef.current) recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
     setTranscript("");
     setSpeechError(null);
-    setIsListening(true);
+    setIsListening(true); // Optimistic update
+    
+    // Play subtle "listening" sound
+    const audio = new Audio("/sounds/pop.mp3"); // Ensure this file exists or use encoded
+    audio.volume = 0.2;
+    audio.play().catch(() => {});
+
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
+    
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
+
+    recognition.onstart = () => {
+       setIsListening(true);
+    };
+
     recognition.onresult = (event: any) => {
       const results = Array.from(event.results);
-      const text = results.map((result: any) => result[0]).map((result: any) => result.transcript).join("");
+      const text = results
+        .map((result: any) => result[0])
+        .map((result: any) => result.transcript)
+        .join("");
+      
       setTranscript(text);
-      if ((results[0] as any).isFinal) checkResult(text);
-    };
-    recognition.onerror = (event: any) => {
-      if (event.error === 'aborted') { setIsListening(false); return; }
-      console.error("Speech Recognition Error:", event.error);
-      setIsListening(false);
-      if (event.error === 'no-speech') {
-        const messages = ["Oops! I didn't hear anything. Speak louder? 🎤", "My ears are wiggling but I didn't catch that! 👂"];
-        setSpeechError(messages[Math.floor(Math.random() * messages.length)]);
-      } else if (event.error === 'not-allowed') {
-        setSpeechError("I need your permission to hear you! 🔓");
-        toast.error("Please allow microphone access in your browser settings.");
-      } else if (event.error === 'network') {
-        setSpeechError("My internet feels a bit sleepy. Try again? ☁️");
-      } else {
-        setSpeechError("Oops! My robot brain got a bit confused.");
+      
+      // Only check result if it's final
+      if ((results[0] as any).isFinal) {
+        setIsListening(false); // Stop listening after result
+        checkResult(text);
       }
     };
+
+    recognition.onerror = (event: any) => {
+      if (event.error === 'aborted') {
+        setIsListening(false);
+        return;
+      }
+      console.error("Speech Recognition Error:", event.error);
+      setIsListening(false);
+      
+      if (event.error === 'no-speech') {
+        // Reduced strictness for demo
+        setSpeechError("🎤 Tap the mic to try again!");
+      } else if (event.error === 'not-allowed') {
+        setSpeechError("🔒 Please allow microphone access.");
+        toast.error("Please allow microphone access in your browser settings.");
+      } else {
+        setSpeechError("⚠️ Connection error. Try again.");
+      }
+    };
+
     recognition.onend = () => {
       setIsListening(false);
       recognitionRef.current = null;
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") mediaRecorderRef.current.stop();
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+        mediaRecorderRef.current.stop();
+      }
     };
+
     try {
       recognition.start();
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
