@@ -348,37 +348,48 @@ export default function PlayPage() {
     if (activeMission) playTTS(`${activeMission.word}`);
   };
 
-  // Cleanup speech recognition on unmount
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop();
-      }
+    // Audio Analysis for Visualizer
+    const [micLevel, setMicLevel] = useState(0);
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const analyserRef = useRef<AnalyserNode | null>(null);
+    const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
+
+    const cleanupAudio = () => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      if (sourceRef.current) sourceRef.current.disconnect();
+      if (analyserRef.current) analyserRef.current.disconnect();
+      if (audioContextRef.current) audioContextRef.current.close();
+      audioContextRef.current = null;
+      setMicLevel(0);
     };
-  }, []);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (recognitionRef.current) recognitionRef.current.abort();
+            cleanupAudio();
+        };
+    }, []);
 
   const startListening = () => {
-    // 1. Safety Check: Browser Support
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) {
       toast.error("Voice not supported in this browser. Please use Chrome.");
       return;
     }
 
-    // 2. Cleanup: Stop any existing instance
     if (recognitionRef.current) {
       recognitionRef.current.abort();
       recognitionRef.current = null;
     }
+    
+    cleanupAudio(); // Ensure clean slate
 
     setTranscript("");
     setSpeechError(null);
-    setIsListening(true); // Immediate feedback for UI responsiveness
+    setIsListening(true);
 
-    // Play start sound
     const playPop = () => {
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
@@ -400,11 +411,10 @@ export default function PlayPage() {
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
-    recognition.maxAlternatives = 5; // Increased alternatives
+    recognition.maxAlternatives = 5;
 
     let hasResult = false;
 
@@ -417,66 +427,94 @@ export default function PlayPage() {
       const results = Array.from(event.results);
       const transcriptItem = results[0] as any;
       const text = transcriptItem[0].transcript;
-      
       setTranscript(text);
-      
       if (transcriptItem.isFinal) {
         hasResult = true;
         setIsListening(false);
+        cleanupAudio();
         checkResult(text);
       }
     };
 
     recognition.onerror = (event: any) => {
-      if (event.error === 'aborted') return; // Ignore intentional stops
-
+      if (event.error === 'aborted') return;
       console.error("Speech Recognition Error:", event.error);
       setIsListening(false);
+      cleanupAudio();
       
-      // Detailed user-friendly errors
       const errorMap: Record<string, string> = {
         'no-speech': "🎤 I didn't hear anything. Speak a bit louder!",
         'audio-capture': "🎤 No microphone found. Is it plugged in?",
         'not-allowed': "🔒 Microphone blocked. Check your browser settings.",
         'network': "📶 Network error. Please check your internet.",
       };
-
       setSpeechError(errorMap[event.error] || "⚠️ Oops! Let's try that again.");
-      
-      if (event.error === 'not-allowed') {
-        toast.error("Microphone access is blocked! 🔒");
-      }
+      if (event.error === 'not-allowed') toast.error("Microphone access is blocked! 🔒");
     };
 
     recognition.onend = () => {
-      // Only reset state if we didn't get a result (smooth transition)
       if (!hasResult) {
         setIsListening(false);
+        cleanupAudio();
       }
       recognitionRef.current = null;
     };
 
     try {
       recognition.start();
-      
-      // Parallel Media Recorder for visualizer (optional, fault-tolerant)
+
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        // 1. Audio Visualizer Setup
+        try {
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContext) {
+            const audioCtx = new AudioContext();
+            audioContextRef.current = audioCtx;
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 32;
+            analyserRef.current = analyser;
+            const source = audioCtx.createMediaStreamSource(stream);
+            sourceRef.current = source;
+            source.connect(analyser);
+
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const updateVolume = () => {
+              if (!analyserRef.current) return;
+              analyser.getByteFrequencyData(dataArray);
+              const sum = dataArray.reduce((a, b) => a + b, 0);
+              const avg = sum / bufferLength;
+              setMicLevel(avg); // 0-255 roughly
+              animationFrameRef.current = requestAnimationFrame(updateVolume);
+            };
+            updateVolume();
+          }
+        } catch (e) {
+          console.warn("Audio Visualizer Init Failed", e);
+        }
+
+        // 2. MediaRecorder (Keep existing logic if needed, or remove if unused. Keep for now as backup)
         try {
           const mediaRecorder = new MediaRecorder(stream);
           mediaRecorderRef.current = mediaRecorder;
           audioChunksRef.current = [];
           mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
           mediaRecorder.onstop = () => {
-             // Cleanup tracks to stop recording icon in tab
              stream.getTracks().forEach(track => track.stop());
           };
           mediaRecorder.start();
         } catch (e) { console.warn("MediaRecorder failed", e); }
-      }).catch(err => console.warn("Mic stream failed (visualizer only)", err));
+      }).catch(err => {
+          console.warn("Mic stream failed", err);
+          // Don't kill recognition just because visualizer failed
+      });
 
     } catch (err) {
       console.error("Speech start error", err);
       setIsListening(false);
+      
+      cleanupAudio();
       setSpeechError("⚠️ Could not start microphone.");
     }
   };
@@ -936,17 +974,33 @@ export default function PlayPage() {
                     "{transcript}"
                   </motion.span>
                 ) : isListening ? (
-                  <motion.span
+                  <motion.div
                     key="listening"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: [0.4, 1, 0.4] }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                    className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.9 }}
+                    className="flex items-center gap-3 bg-white/80 backdrop-blur-md px-5 py-2 rounded-full border border-red-100 shadow-sm text-red-500"
                   >
-                    <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" />
-                    Listening...
-                  </motion.span>
+                     <div className="flex items-center gap-1 h-6">
+                        <motion.div 
+                          animate={{ height: Math.min(20, Math.max(4, micLevel * 0.2)) }} 
+                          className="w-1.5 bg-red-400 rounded-full" 
+                        />
+                        <motion.div 
+                          animate={{ height: Math.min(24, Math.max(8, micLevel * 0.4)) }} 
+                          className="w-1.5 bg-red-500 rounded-full" 
+                        />
+                        <motion.div 
+                          animate={{ height: Math.min(20, Math.max(4, micLevel * 0.25)) }} 
+                          className="w-1.5 bg-red-400 rounded-full" 
+                        />
+                        <motion.div 
+                          animate={{ height: Math.min(16, Math.max(4, micLevel * 0.15)) }} 
+                          className="w-1.5 bg-red-300 rounded-full" 
+                        />
+                     </div>
+                    <span className="text-sm font-bold uppercase tracking-widest animate-pulse">Listening...</span>
+                  </motion.div>
                 ) : !success ? (
                   <motion.div
                     key="prompt"
@@ -980,18 +1034,18 @@ export default function PlayPage() {
                        <Volume2 size={24} className="text-slate-400 group-hover:text-primary transition-colors" />
                      </motion.button>
 
-                     <div className="relative group">
+                     <div className="relative group flex flex-col items-center gap-3">
                        {isListening && (
                          <>
                            <motion.div 
-                             animate={{ scale: [1, 1.4], opacity: [0.5, 0] }}
-                             transition={{ duration: 1.5, repeat: Infinity }}
-                             className="absolute inset-0 bg-red-400 rounded-full z-0"
+                             animate={{ scale: [1, 1.5], opacity: [0.4, 0] }}
+                             transition={{ duration: 1.5, repeat: Infinity, ease: "easeOut" }}
+                             className="absolute top-0 left-0 right-0 h-24 bg-red-400 rounded-full z-0 pointer-events-none"
                            />
                            <motion.div 
                              animate={{ scale: [1, 1.2], opacity: [0.6, 0] }}
-                             transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
-                             className="absolute inset-0 bg-red-400 rounded-full z-0"
+                             transition={{ duration: 1.5, repeat: Infinity, delay: 0.2, ease: "easeOut" }}
+                             className="absolute top-0 left-0 right-0 h-24 bg-red-400 rounded-full z-0 pointer-events-none"
                            />
                          </>
                        )}
@@ -999,21 +1053,29 @@ export default function PlayPage() {
                        <motion.button
                          whileHover={{ scale: 1.05 }}
                          whileTap={{ scale: 0.95 }}
-                         onClick={startListening}
+                         onClick={toggleListening}
                          className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center shadow-xl border-4 transition-all ${
                            isListening 
-                             ? "bg-red-500 border-red-100 shadow-red-500/30" 
-                             : "bg-white border-white shadow-slate-200 hover:border-primary/20"
+                             ? "bg-red-500 border-red-100 shadow-red-500/40 ring-4 ring-red-500/20" 
+                             : "bg-white border-white shadow-slate-200 hover:border-primary/20 hover:shadow-primary/20"
                          }`}
                        >
                          {isListening ? (
-                           <div className="bg-white p-4 rounded-xl shadow-inner">
+                           <motion.div 
+                             initial={{ scale: 0 }}
+                             animate={{ scale: 1 }}
+                             className="bg-white p-4 rounded-xl shadow-inner"
+                           >
                               <div className="w-6 h-6 bg-red-500 rounded-sm" />
-                           </div>
+                           </motion.div>
                          ) : (
-                           <Mic size={40} className="text-slate-700 ml-0.5" />
+                           <Mic size={42} className="text-slate-700 ml-0.5" />
                          )}
                        </motion.button>
+                       
+                       <span className={`text-xs font-bold uppercase tracking-widest transition-colors ${isListening ? "text-red-500 animate-pulse" : "text-slate-400"}`}>
+                         {isListening ? "Tap to Stop" : "Tap to Speak"}
+                       </span>
                      </div>
 
                      <motion.button
