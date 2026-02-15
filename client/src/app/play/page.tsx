@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Mic, Volume2, ArrowLeft, Star, Sparkles, RefreshCw,
-  Trophy, Heart, Award, Lightbulb, Play, Gauge, MicOff
+  Trophy, Heart, Award, Lightbulb, Play, Gauge, MicOff, ArrowRight
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -976,132 +976,174 @@ export default function PlayPage() {
 
               <div className="h-8">
                 <AnimatePresence mode="wait">
-                  {speechError ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="text-red-500 font-black bg-red-100 px-4 py-2 rounded-full text-sm flex items-center gap-2"
-                    >
-                      <Lightbulb size={14} />
-                      {speechError}
-                    </motion.div>
-                  ) : isListening ? (
-                    <motion.p
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="text-lg font-black text-slate-400 animate-pulse"
-                    >
-                      Listening...
-                    </motion.p>
-                  ) : (
-                    <p className="text-slate-400 font-bold">Tap to speak</p>
-                  )}
-                </AnimatePresence>
+                  {/* Active Practice Area */}
+            <div className="relative mb-8 flex flex-col items-center justify-center">
+               <BuddyMascot 
+                isListening={isListening} 
+                isSynthesizing={isSynthesizing} 
+                buddyType={selectedBuddy.id}
+                size={300} 
+                mood={mood}
+              />
+              
+              <div className="absolute -bottom-4 right-0 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 border border-white shadow-sm flex items-center gap-1.5 pointer-events-none">
+                <div className={`w-1.5 h-1.5 rounded-full ${isListening ? "bg-red-500 animate-pulse" : "bg-slate-300"}`} />
+                {isListening ? "Listening..." : "Ready"}
               </div>
             </div>
 
-            {isListening && <AudioVisualizer isListening={isListening} />}
-
-            <div className="h-20 flex items-center justify-center w-full mt-2">
+            {/* Live Transcript Feedback */}
+            <div className="h-8 mb-4 flex items-center justify-center pointer-events-none">
               <AnimatePresence mode="wait">
-                {transcript && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
+                {transcript ? (
+                  <motion.span 
+                    key="transcript"
+                    initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="text-xl font-black bg-white/90 backdrop-blur-xl px-8 py-5 rounded-[2.5rem] shadow-xl border-4 border-white flex items-center gap-3"
+                    exit={{ opacity: 0, y: -5 }}
+                    className="text-2xl font-black text-slate-800 bg-white/50 backdrop-blur px-4 py-1 rounded-xl"
                   >
-                    <span className="text-slate-400 text-sm uppercase tracking-widest">I heard:</span>
-                    <span className="text-primary italic text-2xl">"{transcript}"</span>
-                  </motion.div>
-                )}
+                    "{transcript}"
+                  </motion.span>
+                ) : isListening ? (
+                  <motion.span
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                    className="text-sm font-bold text-slate-400 uppercase tracking-widest"
+                  >
+                    Listening...
+                  </motion.span>
+                ) : null}
               </AnimatePresence>
             </div>
 
-            {/* Conversation History */}
-            {conversationHistory.length > 0 && (
-              <div className="mt-8 w-full max-w-lg bg-white/50 backdrop-blur-md rounded-3xl p-6 border-2 border-white/50">
-                 <h4 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Conversation</h4>
-                 <div className="flex flex-col gap-3 max-h-40 overflow-y-auto pr-2">
-                   {conversationHistory.map((msg, i) => (
-                     <div key={i} className={`flex gap-3 ${msg.sender === 'buddy' ? 'flex-row' : 'flex-row-reverse'}`}>
-                       <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${
-                         msg.sender === 'buddy' ? 'bg-primary text-white' : 'bg-slate-200 text-slate-600'
-                       }`}>
-                         {msg.sender === 'buddy' ? 'B' : 'K'}
-                       </div>
-                       <div className={`px-4 py-2 rounded-2xl text-sm font-bold max-w-[80%] ${
-                         msg.sender === 'buddy' ? 'bg-white text-slate-700 shadow-sm' : 'bg-primary/10 text-primary'
-                       }`}>
-                         {msg.text}
-                       </div>
+            {/* Controls */}
+            <div className="flex flex-col items-center gap-6 w-full max-w-sm mx-auto z-20">
+               {!success ? (
+                 <>
+                   {/* Mic Button */}
+                   <div className="relative group">
+                     {isListening && (
+                       <>
+                         <motion.div 
+                           animate={{ scale: [1, 1.5], opacity: [0.5, 0] }}
+                           transition={{ duration: 1.5, repeat: Infinity }}
+                           className="absolute inset-0 bg-red-400 rounded-full z-0"
+                         />
+                         <motion.div 
+                           animate={{ scale: [1, 1.25], opacity: [0.5, 0] }}
+                           transition={{ duration: 1.5, repeat: Infinity, delay: 0.2 }}
+                           className="absolute inset-0 bg-red-400 rounded-full z-0"
+                         />
+                       </>
+                     )}
+                     
+                     <motion.button
+                       whileHover={{ scale: 1.05 }}
+                       whileTap={{ scale: 0.95 }}
+                       onClick={startListening}
+                       className={`relative z-10 w-24 h-24 rounded-full flex items-center justify-center shadow-xl border-4 transition-all ${
+                         isListening 
+                           ? "bg-red-500 border-red-100 shadow-red-500/30" 
+                           : "bg-white border-white shadow-slate-200 hover:border-primary/20"
+                       }`}
+                     >
+                       {isListening ? (
+                         <div className="bg-white p-4 rounded-xl">
+                            <div className="w-6 h-6 bg-red-500 rounded-sm" />
+                         </div>
+                       ) : (
+                         <Mic size={40} className="text-slate-700 ml-0.5" />
+                       )}
+                     </motion.button>
+                     
+                     <div className="absolute -bottom-8 left-0 right-0 text-center">
+                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                         {isListening ? "Tap to Stop" : "Tap to Speak"}
+                       </span>
                      </div>
-                   ))}
-                 </div>
-              </div>
-            )}
-            
-            {/* Audio Playback */}
-            {recordedAudioUrl && !isListening && (
-              <div className="mt-4 flex items-center gap-3 bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">
-                <span className="text-xs font-bold text-slate-400 uppercase">Your Recording</span>
-                <audio src={recordedAudioUrl} controls className="h-8 w-48" />
-              </div>
-            )}
+                   </div>
+
+                   {/* Helper Buttons */}
+                   <div className="flex gap-4 mt-4">
+                     <motion.button
+                       whileHover={{ scale: 1.05 }}
+                       whileTap={{ scale: 0.95 }}
+                       onClick={previewWord}
+                       className="p-4 bg-white/60 backdrop-blur-md rounded-2xl border-2 border-white shadow-sm hover:bg-white hover:shadow-md transition-all group"
+                       title="Hear Pronunciation"
+                     >
+                       <Volume2 size={24} className="text-slate-400 group-hover:text-primary transition-colors" />
+                     </motion.button>
+                     
+                     <motion.button
+                       whileHover={{ scale: 1.05 }}
+                       whileTap={{ scale: 0.95 }}
+                       onClick={() => setShowTip(!showTip)}
+                       className="p-4 bg-white/60 backdrop-blur-md rounded-2xl border-2 border-white shadow-sm hover:bg-white hover:shadow-md transition-all group"
+                       title="Show Hint"
+                     >
+                       <Lightbulb size={24} className="text-slate-400 group-hover:text-amber-400 transition-colors" />
+                     </motion.button>
+                   </div>
+                 </>
+               ) : (
+                 <motion.div
+                   initial={{ opacity: 0, scale: 0.8, y: 20 }}
+                   animate={{ opacity: 1, scale: 1, y: 0 }}
+                   className="flex flex-col items-center gap-4 w-full"
+                 >
+                   <div className="bg-green-500 text-white px-8 py-4 rounded-[2rem] shadow-xl shadow-green-500/20 border-4 border-white flex items-center gap-3 animate-bounce cursor-default">
+                     <span className="text-2xl">🎉</span>
+                     <span className="text-xl font-black">Perfect!</span>
+                   </div>
+                   
+                   <motion.button
+                     whileHover={{ scale: 1.05 }}
+                     whileTap={{ scale: 0.95 }}
+                     onClick={() => {
+                        setGameState("select");
+                        setSuccess(false);
+                        setMood("happy");
+                     }}
+                     className="w-full max-w-xs py-4 bg-white rounded-2xl font-black text-slate-700 shadow-lg border-2 border-white flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors"
+                   >
+                     Next Mission <ArrowRight size={20} />
+                   </motion.button>
+                 </motion.div>
+               )}
+            </div>
 
             <AnimatePresence>
-              <motion.div
-                animate={{
-                   scale: isListening ? [1, 1.1, 1] : 1,
-                   opacity: isListening ? 1 : 0.5
-                }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-                className={`w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg transition-colors ${isListening ? "bg-red-500 text-white" : "bg-slate-200 text-slate-400"}`}
-              >
-                <Mic size={24} />
-              </motion.div>
-              {success && (
+              {gameState === "practice" && showTip && !success && (
                 <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-md p-6"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="mt-8 bg-amber-50/90 backdrop-blur-md px-6 py-4 rounded-2xl border-2 border-amber-100 text-center max-w-sm shadow-sm"
                 >
-                  <motion.div
-                    initial={{ scale: 0, rotate: -10 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    exit={{ scale: 0 }}
-                    className="bg-white rounded-[4rem] p-12 flex flex-col items-center gap-6 shadow-2xl border-[8px] border-white max-w-lg w-full"
-                  >
-                    <Trophy className="text-yellow-500" size={100} />
-                    <div className="text-center">
-                      <h3 className="text-5xl font-black text-slate-800 mb-1">PERFECT!</h3>
-                      <p className="text-xl font-bold text-slate-400">You're amazing, {kidName}!</p>
-                    </div>
-                    <div className="flex gap-4 w-full">
-                      <div className="flex-1 bg-orange-50 p-5 rounded-[2rem] text-center border-2 border-white shadow-sm">
-                        <div className="text-primary font-black text-3xl">+{DIFFICULTY_XP[activeMission.difficulty]}</div>
-                        <div className="text-xs font-bold uppercase text-primary/60 tracking-wider">XP</div>
-                      </div>
-                      <div className="flex-1 bg-green-50 p-5 rounded-[2rem] text-center border-2 border-white shadow-sm">
-                        <div className="text-green-600 font-black text-3xl">100%</div>
-                        <div className="text-xs font-bold uppercase text-green-600/60 tracking-wider">Sound</div>
-                      </div>
-                    </div>
-                    <motion.button
-                      onClick={() => { setGameState("select"); setSuccess(false); }}
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="w-full py-6 bg-gradient-to-r from-primary to-orange-500 rounded-[2.5rem] text-white font-black text-2xl shadow-xl border-4 border-white"
-                    >
-                      Next Mission!
-                    </motion.button>
-                  </motion.div>
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <Lightbulb size={16} className="text-amber-500" />
+                    <span className="text-xs font-black uppercase tracking-widest text-amber-500">Pro Tip</span>
+                  </div>
+                  <p className="font-bold text-slate-600 text-sm">
+                    "{activeMission.tip}"
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">Try saying: "{activeMission.example}"</p>
                 </motion.div>
               )}
             </AnimatePresence>
+
+            {speechError && !isListening && !success && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-6 bg-red-50 text-red-500 px-4 py-2 rounded-xl text-sm font-bold border border-red-100 flex items-center gap-2"
+              >
+                {speechError}
+              </motion.div>
+            )}
+            
           </motion.div>
         )}
       </AnimatePresence>
