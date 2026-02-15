@@ -325,78 +325,73 @@ export default function HomePage() {
                 for every child.
               </motion.p>
 
-              {/* CTA & Name Input Area */}
-              <motion.div variants={fadeUp} className="flex flex-col items-center gap-6 mb-14 w-full max-w-lg mx-auto">
-                {!existingUser ? (
-                  <motion.div 
-                    animate={isShaking ? { x: [-5, 5, -5, 5, 0] } : {}}
-                    transition={{ duration: 0.4 }}
-                    className="w-full"
-                  >
-                    <div className="relative group">
-                      <input
-                        type="text"
-                        placeholder="Enter your name to start..."
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleStart()}
-                        className={`w-full px-8 py-6 bg-white/80 backdrop-blur-xl rounded-[2.5rem] border-4 outline-none text-2xl font-black text-slate-800 shadow-xl transition-all placeholder:text-slate-300 text-center ${
-                          isShaking ? "border-red-400" : "border-white focus:border-[#8B7FDE]"
-                        }`}
-                      />
-                      <motion.div 
-                        animate={name.trim() ? { scale: [1, 1.1, 1] } : {}}
-                        transition={{ repeat: Infinity, duration: 2 }}
-                        className="absolute -right-2 -top-2 bg-primary text-white p-2.5 rounded-full shadow-lg border-2 border-white scale-0 group-focus-within:scale-100 transition-transform"
-                      >
-                        <Heart size={18} fill="white" />
-                      </motion.div>
-                    </div>
-                  </motion.div>
-                ) : null}
-
-                <div className="flex flex-wrap items-center justify-center gap-4 w-full">
+              {/* CTA & Actions Area */}
+              <motion.div variants={fadeUp} className="flex flex-col items-center gap-8 mb-14 w-full max-w-lg mx-auto">
+                {/* Main Buttons Row */}
+                <div className="flex flex-row items-center justify-center gap-3 w-full">
                   <MagneticButton
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={handleStart}
-                    className="group relative px-10 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-xl shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer"
+                    className="group relative flex-1 max-w-[240px] px-6 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-lg shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer"
                   >
                     <motion.div
                       className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
                       animate={{ x: ["-100%", "200%"] }}
                       transition={{ duration: 3, repeat: Infinity, repeatDelay: 2 }}
                     />
-                    <span className="relative z-10 flex items-center gap-3">
-                      <Sparkles size={22} />
-                      {existingUser ? "Continue Adventure" : "Start Adventure"}
-                      <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                    <span className="relative z-10 flex items-center justify-center gap-2">
+                      <Sparkles size={18} />
+                      {existingUser ? "Continue" : "Start"}
+                      <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
                     </span>
                   </MagneticButton>
+
+                  <Link href="/parent" data-tour="parent-portal" className="flex-1 max-w-[200px]">
+                    <MagneticButton
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="w-full px-6 py-5 bg-white/80 backdrop-blur-xl rounded-[2rem] text-slate-700 font-black text-lg shadow-lg hover:shadow-xl border-4 border-white/80 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <BarChart3 size={18} />
+                      Portal
+                    </MagneticButton>
+                  </Link>
 
                   {existingUser && (
                     <motion.button
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={resetUser}
-                      className="flex items-center gap-2 group px-6 py-5 bg-white/60 backdrop-blur-md rounded-[2rem] border-4 border-white text-slate-500 font-black text-lg shadow-lg hover:shadow-xl transition-all cursor-pointer hover:text-red-500 hover:border-red-100"
+                      className="p-4 bg-white/60 backdrop-blur-md rounded-[2rem] border-4 border-white text-slate-400 hover:text-red-500 hover:border-red-100 transition-all cursor-pointer shadow-lg"
+                      title="Switch User"
                     >
-                      <RefreshCw size={20} className="group-hover:rotate-180 transition-transform duration-500" />
-                      Switch User
+                      <RefreshCw size={22} />
                     </motion.button>
                   )}
-
-                  <Link href="/parent" data-tour="parent-portal">
-                    <MagneticButton
-                      whileHover={{ scale: 1.03 }}
-                      whileTap={{ scale: 0.97 }}
-                      className="px-8 py-5 bg-white/80 backdrop-blur-xl rounded-[2rem] text-slate-700 font-black text-lg shadow-lg hover:shadow-xl border-4 border-white/80 transition-all flex items-center gap-3 cursor-pointer"
-                    >
-                      <BarChart3 size={20} />
-                      Parent Portal
-                    </MagneticButton>
-                  </Link>
                 </div>
+
+                {/* Name Input Below Buttons (New Flow) */}
+                {!existingUser ? (
+                  <motion.div 
+                    animate={isShaking ? { x: [-5, 5, -5, 5, 0] } : {}}
+                    transition={{ duration: 0.4 }}
+                    className="w-full flex flex-col items-center gap-3"
+                  >
+                    <div className="relative group w-full max-w-xs">
+                      <input
+                        type="text"
+                        placeholder="Enter your name..."
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleStart()}
+                        className={`w-full px-6 py-4 bg-white/40 backdrop-blur-md rounded-[1.5rem] border-2 outline-none text-base font-bold text-slate-700 shadow-inner transition-all placeholder:text-slate-400 text-center ${
+                          isShaking ? "border-red-400" : "border-white/80 focus:border-[#8B7FDE] focus:bg-white/80"
+                        }`}
+                      />
+                    </div>
+                  </motion.div>
+                ) : null}
               </motion.div>
 
               {/* How It Works */}

@@ -166,7 +166,7 @@ function BackgroundMusic() {
 
   useEffect(() => {
     // Using a calm, royalty-free ambient track
-    const track = new Audio("https://cdn.pixabay.com/audio/2022/02/10/audio_0151fb7890.mp3"); 
+    const track = new Audio(""); // Empty URL to avoid 403, user can provide new one later
     track.loop = true;
     track.volume = volume;
     setAudio(track);
