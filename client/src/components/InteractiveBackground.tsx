@@ -161,64 +161,77 @@ export default function InteractiveBackground() {
 
 function BackgroundMusic() {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [volume, setVolume] = useState(0.3);
-  // const audioRef = useState(() => typeof Audio !== "undefined" ? new Audio("/happy-tunes.mp3") : null)[0];
-  const [audioRef] = useState<HTMLAudioElement | null>(null); // Disabled until valid MP3 provided
+  const [volume, setVolume] = useState(0.2);
+  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    if (audioRef) {
-      audioRef.loop = true;
-      audioRef.volume = volume;
-    }
+    // Using a calm, royalty-free ambient track
+    const track = new Audio("https://cdn.pixabay.com/audio/2022/02/10/audio_0151fb7890.mp3"); 
+    track.loop = true;
+    track.volume = volume;
+    setAudio(track);
+
     return () => {
-      audioRef?.pause();
+      track.pause();
     };
-  }, [audioRef]);
+  }, []);
 
   useEffect(() => {
-    if (audioRef) {
+    if (audio) {
       if (isPlaying) {
-        audioRef.play().catch(() => setIsPlaying(false)); // Handle autoplay block
+        audio.play().catch(() => {
+          console.warn("Autoplay blocked - interaction required");
+          setIsPlaying(false);
+        });
       } else {
-        audioRef.pause();
+        audio.pause();
       }
     }
-  }, [isPlaying, audioRef]);
+  }, [isPlaying, audio]);
 
-  // Handle volume change
   useEffect(() => {
-    if (audioRef) audioRef.volume = volume;
-  }, [volume, audioRef]);
+    if (audio) audio.volume = volume;
+  }, [volume, audio]);
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 flex items-center gap-2 bg-white/80 backdrop-blur-md p-2 pl-4 rounded-full border border-white/50 shadow-lg transition-all hover:bg-white">
+    <div className="fixed bottom-6 left-6 z-50 flex items-center gap-3 bg-white/60 backdrop-blur-xl p-2.5 rounded-2xl border-2 border-white/80 shadow-2xl transition-all hover:bg-white/90 group">
       <button 
         onClick={() => setIsPlaying(!isPlaying)}
-        className="text-slate-500 hover:text-primary transition-colors"
+        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
+          isPlaying ? "bg-primary text-white shadow-lg shadow-primary/20" : "bg-slate-100 text-slate-400"
+        }`}
         title={isPlaying ? "Pause Music" : "Play Music"}
       >
         {isPlaying ? (
-          <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 1 }}>
-            🎵
+          <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 2 }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 18V5l12-2v13"></path>
+              <circle cx="6" cy="18" r="3"></circle>
+              <circle cx="18" cy="16" r="3"></circle>
+            </svg>
           </motion.div>
         ) : (
-           <span className="opacity-50 grayscale">🎵</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="opacity-50">
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+            <path d="M9 18V5l12-2v13"></path>
+            <circle cx="6" cy="18" r="3"></circle>
+            <circle cx="18" cy="16" r="3"></circle>
+          </svg>
         )}
       </button>
       
-      {isPlaying && (
-        <motion.input
-          initial={{ width: 0, opacity: 0 }}
-          animate={{ width: 60, opacity: 1 }}
+      <div className="flex flex-col gap-1 pr-2 overflow-hidden w-0 group-hover:w-24 transition-all duration-500 ease-out">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap">Music Volume</span>
+        <input
           type="range"
           min="0"
           max="1"
           step="0.05"
           value={volume}
           onChange={(e) => setVolume(parseFloat(e.target.value))}
-          className="h-1 accent-primary cursor-pointer"
+          className="h-1 accent-primary cursor-pointer w-full"
         />
-      )}
+      </div>
     </div>
   );
 }

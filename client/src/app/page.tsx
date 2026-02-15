@@ -97,6 +97,30 @@ export default function HomePage() {
     return () => clearTimeout(t);
   }, []);
 
+  const playWelcome = async () => {
+    try {
+      const { playCachedTTS } = await import("@/lib/audio");
+      const name = localStorage.getItem("kidName");
+      const message = name 
+        ? `Welcome back, ${name}! Your buddy Wolfie is so happy to see you again! Click the button to continue our adventure!`
+        : "Hi there! Welcome to Fable! I'm Wolfie, your new speech therapy buddy! I'm so excited to help you learn and play! Click the start button below to begin our journey together!";
+      
+      playCachedTTS(message, "C"); // Using voice 'C' (Wolfie/Male)
+    } catch (e) {
+      console.error("Welcome voice failed", e);
+    }
+  };
+
+  // Trigger welcome on first interaction to bypass browser autoplay policy
+  useEffect(() => {
+    const handleFirstClick = () => {
+      playWelcome();
+      window.removeEventListener("click", handleFirstClick);
+    };
+    window.addEventListener("click", handleFirstClick);
+    return () => window.removeEventListener("click", handleFirstClick);
+  }, []);
+
   const resetUser = () => {
     localStorage.clear();
     window.location.reload();
