@@ -43,3 +43,55 @@ body {
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
+
+/* Page transition system - CSS only, GPU-accelerated */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes page-fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
+}
+
+.page-enter {
+  animation: page-fade-in 0.3s ease-out both;
+}
+
+.page-exit {
+  animation: page-fade-out 0.2s ease-in both;
+}
+
+/* Transition overlay for route changes */
+.route-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: var(--background);
+  opacity: 0;
+  transition: opacity 0.2s ease-in;
+}
+.route-overlay.active {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Minimal loader spinner (only shows after 300ms delay) */
+@keyframes loader-spin {
+  to { transform: rotate(360deg); }
+}
+.route-loader {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #8B7FDE;
+  border-radius: 50%;
+  animation: loader-spin 0.6s linear infinite;
+}
+
+/* Prevent layout shift during hydration */
+[data-hydrating] {
+  visibility: hidden;
+}

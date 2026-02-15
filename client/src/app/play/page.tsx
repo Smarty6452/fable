@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Mic, Volume2, ArrowLeft, Star, Sparkles, RefreshCw,
-  Trophy, Heart, Award, Lightbulb, Play, Gauge, MicOff, ArrowRight
+  Lightbulb, Gauge, ArrowRight, MicOff
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -15,7 +15,7 @@ import InteractiveBackground from "@/components/InteractiveBackground";
 import GuidedTour, { PLAY_TOUR_STEPS } from "@/components/GuidedTour";
 import { NotificationBell, useNotifications, triggerLevelUpNotification, triggerStreakNotification } from "@/components/NotificationBell";
 import { preloadTTS, playCachedTTS, stopAllTTS } from "@/lib/audio";
-import { CHAPTERS, getUnlockedChapters, getCurrentChapter } from "@/data/chapters";
+import { CHAPTERS, getUnlockedChapters } from "@/data/chapters";
 import { MISSIONS, type Mission } from "@/data/missions";
 import { 
   XP_PER_WORD, 
@@ -38,30 +38,61 @@ export default function PlayPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // Hooks
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification } = useNotifications();
 
-  // Core Game State
-  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "ending">("onboarding");
-  const [selectedBuddy, setSelectedBuddy] = useState(BUDDIES[0]);
+  // Core Game State — determine initial state synchronously to prevent flash
+  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "ending">(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("kidName")) return "select";
+    return "onboarding";
+  });
+  const [selectedBuddy, setSelectedBuddy] = useState(() => {
+    if (typeof window !== "undefined") {
+      const savedId = localStorage.getItem("selectedBuddy");
+      if (savedId) {
+        const found = BUDDIES.find(b => b.id === savedId);
+        if (found) return found;
+      }
+    }
+    return BUDDIES[0];
+  });
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
   
   // Audio/Voice State
+  const [listeningMode, setListeningMode] = useState<"name" | "buddy" | "practice" | null>(null);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
 
-  // Progress State
-  const [kidName, setKidName] = useState("");
-  const [xp, setXp] = useState(0);
-  const [level, setLevel] = useState(1);
-  const [streak, setStreak] = useState(0);
-  const [completedMissions, setCompletedMissions] = useState<string[]>([]);
+  // Progress State — read localStorage synchronously to prevent layout shift
+  const [kidName, setKidName] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("kidName") || "";
+    return "";
+  });
+  const [xp, setXp] = useState(() => {
+    if (typeof window !== "undefined") return parseInt(localStorage.getItem("xp") || "0");
+    return 0;
+  });
+  const [level, setLevel] = useState(() => {
+    if (typeof window !== "undefined") return parseInt(localStorage.getItem("level") || "1");
+    return 1;
+  });
+  const [streak, setStreak] = useState(() => {
+    if (typeof window !== "undefined") return parseInt(localStorage.getItem("streak") || "0");
+    return 0;
+  });
+  const [completedMissions, setCompletedMissions] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try { return JSON.parse(localStorage.getItem("completedMissions") || "[]"); }
+      catch { return []; }
+    }
+    return [];
+  });
   
   // UI State
   const [voiceSpeed, setVoiceSpeed] = useState(1.0);
@@ -81,11 +112,10 @@ export default function PlayPage() {
   const xpInfo = useMemo(() => getXpProgressInLevel(xp), [xp]);
   const unlockedChapters = useMemo(() => getUnlockedChapters(xp), [xp]);
 
-  // Load Saved Progress
+  // Load Saved Progress (gameState + buddy already set via initializers — no flash)
   useEffect(() => {
     setHasMounted(true);
     const savedName = localStorage.getItem("kidName");
-    const savedBuddy = localStorage.getItem("selectedBuddy");
     const savedXp = localStorage.getItem("xp");
     const savedLevel = localStorage.getItem("level");
     const savedStreak = localStorage.getItem("streak");
@@ -93,50 +123,26 @@ export default function PlayPage() {
 
     if (savedName) {
       setKidName(savedName);
-      if (savedBuddy) {
-        try {
-          const buddy = BUDDIES.find(b => b.id === savedBuddy) || JSON.parse(savedBuddy);
-          setSelectedBuddy(buddy);
-        } catch (e) {
-          setSelectedBuddy(BUDDIES[0]);
-        }
-      }
       if (savedXp) setXp(parseInt(savedXp));
       if (savedLevel) setLevel(parseInt(savedLevel));
       if (savedStreak) setStreak(parseInt(savedStreak));
       if (savedMissions) setCompletedMissions(JSON.parse(savedMissions));
-      
-      setGameState("select");
 
-      // Verbal Greeting Hand-off from Homepage
-      const checkGreeting = async () => {
-        const isNewSession = sessionStorage.getItem("justLoggedIn");
-        if (isNewSession) {
-          sessionStorage.removeItem("justLoggedIn");
-          const name = localStorage.getItem("kidName") || "Explorer";
-          
-          // Emotional, high-stakes greeting on landing
-          const greetingText = `Hi ${name}! I am so happy you are here! Pick your spirit buddy below to start our magical voice adventure!`;
-          
-          // Use a small delay so the user is settled on the page before Wolfie starts talking
-          setTimeout(async () => {
-            await playTTS(greetingText);
-            
-            // Add a small guidance line after greeting for first-time vibes
-            setTimeout(() => {
-              playTTS("I'll be waiting in the missions whenever you're ready!");
-            }, 800);
-          }, 600);
-        }
-      };
-      checkGreeting();
+      // Verbal Greeting Hand-off from Homepage (single greeting, no overlap)
+      const isNewSession = sessionStorage.getItem("justLoggedIn");
+      if (isNewSession) {
+        sessionStorage.removeItem("justLoggedIn");
+        const greetingText = `Hi ${savedName}! I am so happy you are here! Pick your spirit buddy below to start our magical voice adventure!`;
+        // Small delay so the user settles on the page first
+        setTimeout(() => playTTS(greetingText), 500);
+      }
 
       // Add welcome notification if none exist
-      const welcomeKey = "talkybuddy-welcome-notified";
+      const welcomeKey = "fable-welcome-notified";
       if (!localStorage.getItem(welcomeKey)) {
         addNotification({
           type: "reward",
-          title: "Welcome! 🎁",
+          title: "Welcome!",
           message: "Ready for an adventure? Let's practice some sounds!",
         });
         localStorage.setItem(welcomeKey, "true");
@@ -163,11 +169,11 @@ export default function PlayPage() {
           const data = await res.json();
           if (data.voices) {
             setAvailableVoices(prev => [...prev, ...data.voices]);
-            // console.log("✅ Available Smallest AI voices:", data.voices);
+
           }
         }
       } catch (err) {
-        console.warn("Failed to fetch Smallest AI voices:", err);
+        // Voice fetch failed silently — fallback voices remain
       }
     };
     fetchSmallestVoices();
@@ -206,19 +212,22 @@ export default function PlayPage() {
   const stopAllAudio = () => {
     // 1. Browser Speech
     window.speechSynthesis.cancel();
-    
-    // 2. Audio Elements
+
+    // 2. Cached TTS from audio lib
+    stopAllTTS();
+
+    // 3. Audio Elements
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
 
-    // 3. Reset States
+    // 4. Reset States
     setIsSynthesizing(false);
     setIsSpeaking(false);
   };
 
-  const startListening = () => {
+  const startListening = (mode: "name" | "buddy" | "practice" = "practice") => {
     // 0. STOP ANY TALKING BUDDY FIRST
     stopAllAudio();
 
@@ -231,24 +240,24 @@ export default function PlayPage() {
 
     // 2. Cleanup: Stop any existing instance
     if (recognitionRef.current) {
-      recognitionRef.current.abort();
+      try { recognitionRef.current.abort(); } catch(e) {}
       recognitionRef.current = null;
     }
     
-    if (stream) {
-      stream.getTracks().forEach(track => track.stop());
-      setStream(null);
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
 
     setTranscript("");
     setSpeechError(null);
     setIsListening(true);
+    setListeningMode(mode);
 
-    const playPop = () => {
-       // ... existing pop sound logic (unchanged) ...
-       try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
+    // Play Pop Sound
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContext) {
         const ctx = new AudioContext();
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -260,9 +269,8 @@ export default function PlayPage() {
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
         osc.start();
         osc.stop(ctx.currentTime + 0.1);
-      } catch (e) { /* ignore */ }
-    };
-    playPop();
+      }
+    } catch (e) { /* ignore */ }
 
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
@@ -287,50 +295,80 @@ export default function PlayPage() {
       if (transcriptItem.isFinal) {
         hasResult = true;
         setIsListening(false);
-        checkResult(text);
+        setListeningMode(null);
+        
+        // ROUTE BASED ON MODE
+        if (mode === "name") handleNameInput(text);
+        else if (mode === "buddy") handleBuddySelection(text);
+        else checkResult(text);
       }
     };
 
     recognition.onerror = (event: any) => {
       if (event.error === 'aborted') return;
-      console.error("Speech Recognition Error:", event.error);
       setIsListening(false);
+      setListeningMode(null);
       
       const errorMap: Record<string, string> = {
-        'no-speech': "ðŸŽ¤ I didn't hear anything. Speak a bit louder!",
-        'audio-capture': "ðŸŽ¤ No microphone found. Is it plugged in?",
-        'not-allowed': "ðŸ”’ Microphone blocked. Check your browser settings.",
-        'network': "ðŸ“¶ Network error. Please check your internet.",
+        'no-speech': "🎤 I didn't hear anything. Speak a bit louder!",
+        'audio-capture': "🎤 No microphone found. Is it plugged in?",
+        'not-allowed': "🔒 Microphone blocked. Check your browser settings.",
+        'network': "📡 Network error. Please check your internet.",
       };
-      setSpeechError(errorMap[event.error] || "âš ï¸ Oops! Let's try that again.");
-      if (event.error === 'not-allowed') toast.error("Microphone access is blocked! ðŸ”’");
+      setSpeechError(errorMap[event.error] || "⚠️ Oops! Let's try that again.");
+      if (event.error === 'not-allowed') toast.error("Microphone access is blocked! 🔒");
     };
 
     recognition.onend = () => {
-      if (!hasResult) setIsListening(false);
+      if (!hasResult) {
+        setIsListening(false);
+        setListeningMode(null);
+      }
       recognitionRef.current = null;
-      // Note: We keep the stream open just a bit for visualizer fade out ideally, 
-      // but for simplicity/performance we stop tracks on unmount or next start.
-      // Or we can stop stream here to save battery. Let's stop it here.
-      if (stream) {
-          stream.getTracks().forEach(track => track.stop());
-          setStream(null);
+      if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
       }
     };
 
     try {
       recognition.start();
-
       navigator.mediaDevices.getUserMedia({ audio: true }).then(newStream => {
-        setStream(newStream);
-      }).catch(err => {
-          console.warn("Mic stream failed", err);
-      });
-
+        streamRef.current = newStream;
+      }).catch(err => { /* Mic stream unavailable */ });
     } catch (err) {
-      console.error("Speech start error", err);
       setIsListening(false);
-      setSpeechError("âš ï¸ Could not start microphone.");
+      setListeningMode(null);
+      setSpeechError("⚠️ Could not start microphone.");
+    }
+  };
+
+  const handleNameInput = (text: string) => {
+    const cleanName = text.replace(/[.,!]/g, "").trim();
+    if (cleanName.length > 1) {
+      setKidName(cleanName);
+      playTTS(`Nice to meet you, ${cleanName}!`);
+    } else {
+      playTTS("I didn't catch that. What is your name?");
+    }
+  };
+
+  const handleBuddySelection = (text: string) => {
+    const lower = text.toLowerCase();
+    const buddy = BUDDIES.find(b => 
+      lower.includes(b.name.toLowerCase()) || 
+      lower.includes(b.id) ||
+      (b.id === 'cat' && (lower.includes('kitten') || lower.includes('kitty'))) ||
+      (b.id === 'dog' && (lower.includes('puppy') || lower.includes('dog'))) ||
+      (b.id === 'wolf' && lower.includes('wolf'))
+    );
+
+    if (buddy) {
+      setSelectedBuddy(buddy);
+      const voice = getVoiceForBuddy(buddy.id);
+      playCachedTTS(`You picked ${buddy.name}! Great choice!`, voice);
+    } else {
+      playTTS("I didn't hear a buddy's name. Try saying Wolfie, Bolt, Luna, Max, or Mochi!");
     }
   };
 
@@ -419,6 +457,19 @@ export default function PlayPage() {
     speakFirstTime(mission);
   };
 
+  // Preload greetings for all missions in the current chapter so first TTS is instant
+  useEffect(() => {
+    if (gameState !== "select" || !kidName) return;
+    const voiceId = getVoiceForBuddy(selectedBuddy.id);
+    // Stagger preloads to avoid API rate limits
+    missionsForChapter.forEach((mission, i) => {
+      setTimeout(() => {
+        const text = `Let's practice the ${mission.sound} sound. Can you say ${mission.word}?`;
+        preloadTTS(text, voiceId, voiceSpeed);
+      }, i * 600);
+    });
+  }, [gameState, selectedChapterId, selectedBuddy.id, voiceSpeed, kidName]);
+
   const speakFirstTime = async (mission: Mission) => {
     const greetings = [
       `Hi ${kidName}! Ready for an adventure?`,
@@ -433,7 +484,7 @@ export default function PlayPage() {
   const playTTSFallback = (text: string): Promise<void> => {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) {
-        console.error("No SpeechSynthesis supported");
+        // No SpeechSynthesis — resolve silently
         resolve();
         return;
       }
@@ -459,7 +510,7 @@ export default function PlayPage() {
         resolve();
       };
       utterance.onerror = (e) => {
-        console.error("SpeechSynthesis Error:", e);
+        // SpeechSynthesis error — resolve silently
         setIsSpeaking(false); 
         resolve();
       };
@@ -482,25 +533,24 @@ export default function PlayPage() {
 
 
   const playTTS = async (text: string): Promise<void> => {
-    stopAllTTS(); // Stop any background hover sounds immediately
+    stopAllAudio(); // Stop ALL audio (previous playTTS, hover sounds, browser speech)
     setIsSynthesizing(true);
-    
-    return new Promise(async (resolve) => {
-      try {
-        const voiceId = getVoiceForBuddy(selectedBuddy.id);
-        const audioUrl = await preloadTTS(text, voiceId);
-        
-        if (!audioUrl) {
-          console.warn("Preload failed, using fallback");
-          await playTTSFallback(text);
-          setIsSynthesizing(false);
-          setIsSpeaking(false);
-          return resolve();
-        }
 
-        const audio = new Audio(audioUrl);
-        audioRef.current = audio;
-        
+    try {
+      const voiceId = getVoiceForBuddy(selectedBuddy.id);
+      const audioUrl = await preloadTTS(text, voiceId, voiceSpeed);
+
+      if (!audioUrl) {
+        await playTTSFallback(text);
+        setIsSynthesizing(false);
+        setIsSpeaking(false);
+        return;
+      }
+
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      await new Promise<void>((resolve) => {
         audio.onplay = () => setIsSpeaking(true);
         audio.onended = () => {
           setIsSpeaking(false);
@@ -513,16 +563,18 @@ export default function PlayPage() {
           setIsSynthesizing(false);
           resolve();
         };
-        
-        await audio.play();
-      } catch (error: any) {
-        console.warn("TTS flow error, using fallback:", error.message);
-        await playTTSFallback(text);
-        setIsSynthesizing(false);
-        setIsSpeaking(false);
-        resolve();
-      }
-    });
+        audio.play().catch(async () => {
+          await playTTSFallback(text);
+          setIsSynthesizing(false);
+          setIsSpeaking(false);
+          resolve();
+        });
+      });
+    } catch {
+      await playTTSFallback(text);
+      setIsSynthesizing(false);
+      setIsSpeaking(false);
+    }
   };
 
   const previewWord = () => {
@@ -534,19 +586,33 @@ export default function PlayPage() {
     if (isListening) {
       if (recognitionRef.current) recognitionRef.current.abort();
       setIsListening(false);
+      setListeningMode(null);
     } else {
-      startListening();
+      startListening("practice");
     }
   };
 
   const checkResult = async (text: string) => {
+    // VOICE NAVIGATION COMMANDS
+    const navCommand = text.toLowerCase().trim();
+    if (navCommand.includes("go home") || navCommand.includes("stop game")) {
+      playTTS("Okay, heading home!");
+      stopAllAudio();
+      setGameState("select");
+      return;
+    }
+    if ((navCommand.includes("next") || navCommand.includes("skip")) && (success || attempts > 2)) {
+      playTTS("Skipping to the next mission!");
+      // Logic to find next mission would go here, for now just go back to select
+      setGameState("select"); 
+      return;
+    }
+
     if (!activeMission) return;
 
     const normalizedText = text.toLowerCase().replace(/[.,!?;:]/g, "").trim();
     const targetWord = activeMission.word.toLowerCase().trim();
     const targetSound = activeMission.sound.toLowerCase().trim();
-    
-    // console.log(`🎙️ Hearing: "${normalizedText}" | Target: "${targetWord}"`);
 
     const targetRegex = new RegExp(`\\b${targetWord}\\b`, 'i');
     const isCorrect = targetRegex.test(normalizedText) || 
@@ -666,7 +732,6 @@ export default function PlayPage() {
     }
   };
 
-  // console.log("Current status:", { xp, level, gameState });
 
   return (
     <div 
@@ -710,22 +775,51 @@ export default function PlayPage() {
             </h2>
             <p className="text-xl text-slate-500 mb-6 font-bold">Your AI Speech Buddy! What's your name?</p>
 
-            <input
-              type="text"
-              placeholder="Type your name to start or continue..."
-              value={kidName}
-              onChange={(e) => setKidName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && kidName.trim() && saveOnboarding()}
-              className="w-full p-6 text-3xl font-black rounded-[2.5rem] border-4 border-white focus:border-primary outline-none mb-8 text-center shadow-xl bg-white/80 backdrop-blur-sm focus:bg-white transition-all placeholder:text-slate-300"
-              autoFocus
-              suppressHydrationWarning
-            />
+            <div className="relative w-full max-w-sm mb-8">
+              <input
+                type="text"
+                placeholder="Type your name..."
+                value={kidName}
+                onChange={(e) => setKidName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && kidName.trim() && saveOnboarding()}
+                className="w-full p-6 text-3xl font-black rounded-[2.5rem] border-4 border-white focus:border-primary outline-none text-center shadow-xl bg-white/80 backdrop-blur-sm focus:bg-white transition-all placeholder:text-slate-300"
+                autoFocus
+                disabled={listeningMode === "name"}
+                suppressHydrationWarning
+              />
+              <button
+                onClick={() => startListening("name")}
+                className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full transition-all ${
+                  listeningMode === "name" 
+                    ? "bg-red-500 text-white animate-pulse shadow-red-300 shadow-lg" 
+                    : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
+                }`}
+                title="Say your name!"
+              >
+                {listeningMode === "name" ? <MicOff size={24} /> : <Mic size={24} />}
+              </button>
+            </div>
 
-            <p className="text-sm text-slate-400 mb-4 font-black uppercase tracking-widest">Pick Your Buddy</p>
-            <BuddySelector
-              selectedId={selectedBuddy.id}
-              onSelect={(id) => setSelectedBuddy(BUDDIES.find(b => b.id === id)!)}
-            />
+            <p className="text-sm text-slate-400 mb-4 font-black uppercase tracking-widest">
+              Pick Your Buddy (or say their name!)
+            </p>
+            <div className="relative">
+              <BuddySelector
+                selectedId={selectedBuddy.id}
+                onSelect={(id) => setSelectedBuddy(BUDDIES.find(b => b.id === id)!)}
+              />
+              <button
+                onClick={() => startListening("buddy")}
+                className={`absolute -right-16 top-1/2 -translate-y-1/2 p-4 rounded-full transition-all shadow-xl border-4 border-white ${
+                  listeningMode === "buddy"
+                    ? "bg-red-500 text-white animate-pulse shadow-red-300"
+                    : "bg-white text-primary hover:bg-slate-50"
+                }`}
+                title="Say a buddy's name!"
+              >
+                 {listeningMode === "buddy" ? <MicOff size={24} /> : <Mic size={24} />}
+              </button>
+            </div>
 
             <motion.button
               onClick={saveOnboarding}
@@ -788,10 +882,10 @@ export default function PlayPage() {
 
             <div className="flex flex-col items-center gap-2 mb-10">
               <div className="w-48 h-48 mb-2 flex items-center justify-center">
-                <BuddyMascot 
-                  isListening={false} 
-                  isSynthesizing={false} 
-                  buddyType={selectedBuddy.id} 
+                <BuddyMascot
+                  isListening={false}
+                  isSynthesizing={isSpeaking}
+                  buddyType={selectedBuddy.id}
                   size={180}
                 />
               </div>
@@ -848,7 +942,7 @@ export default function PlayPage() {
                     onMouseEnter={() => {
                         const voice = getVoiceForBuddy(selectedBuddy.id);
                         // Force lowercase for better TTS matching if needed, though most APIs handle title case
-                        playCachedTTS(mission.word, voice);
+                        playCachedTTS(mission.word, voice, voiceSpeed);
                     }}
                     className="relative bg-white/80 backdrop-blur-xl p-8 rounded-[3rem] border-4 border-white shadow-xl hover:shadow-2xl transition-all group"
                     suppressHydrationWarning
@@ -911,9 +1005,9 @@ export default function PlayPage() {
           >
             {/* Practice Header */}
             <div className="w-full flex justify-between items-center mb-6 px-4 absolute top-0 left-0 right-0 z-50">
-               <motion.button 
-                 onClick={() => setGameState("select")}
-                 whileHover={{ scale: 1.05 }} 
+               <motion.button
+                 onClick={() => { stopAllAudio(); setGameState("select"); }}
+                 whileHover={{ scale: 1.05 }}
                  whileTap={{ scale: 0.95 }}
                  className="p-3 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border-2 border-white/80 hover:bg-slate-100 transition-colors"
                >
@@ -961,7 +1055,7 @@ export default function PlayPage() {
                     "{transcript}"
                   </motion.span>
                 ) : isListening ? (
-                  <MicVisualizer stream={stream} />
+                  <MicVisualizer stream={streamRef.current} />
                 ) : !success ? (
                   <motion.div
                     key="prompt"
@@ -1092,6 +1186,7 @@ export default function PlayPage() {
                      whileHover={{ scale: 1.05 }}
                      whileTap={{ scale: 0.95 }}
                      onClick={() => {
+                        stopAllAudio();
                         setGameState("select");
                         setSuccess(false);
                         setMood("happy");

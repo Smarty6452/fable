@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
+import PageTransitionProvider from "@/components/PageTransition";
 
 const outfit = Outfit({ subsets: ["latin"] });
 
@@ -19,7 +20,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={outfit.className}>
-        {children}
+        <PageTransitionProvider>
+          {children}
+        </PageTransitionProvider>
         <Toaster
           position="top-center"
           richColors

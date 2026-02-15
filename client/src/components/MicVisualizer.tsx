@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 
-export default function MicVisualizer({ stream }: { stream: MediaStream | null }) {
+function MicVisualizer({ stream }: { stream: MediaStream | null }) {
   const [micLevel, setMicLevel] = useState(0);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -39,7 +39,7 @@ export default function MicVisualizer({ stream }: { stream: MediaStream | null }
       updateVolume();
 
     } catch (e) {
-      console.warn("Audio Context Error", e);
+      // Audio Context failed — visualizer disabled
     }
 
     return () => {
@@ -79,3 +79,5 @@ export default function MicVisualizer({ stream }: { stream: MediaStream | null }
     </motion.div>
   );
 }
+
+export default memo(MicVisualizer);

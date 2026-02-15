@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useMotionValue, useSpring } from "framer-motion";
 import { Sparkles, Volume2, Mic, BarChart3, Shield, ArrowRight, RefreshCw, Heart, Star, Zap, ChevronDown } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import GuidedTour, { HOME_TOUR_STEPS } from "@/components/GuidedTour";
 import { NotificationBell, useNotifications } from "@/components/NotificationBell";
 import WolfieMascot from "@/components/WolfieMascot";
 import InteractiveBackground from "@/components/InteractiveBackground";
 import { stopAllTTS } from "@/lib/audio";
+import { usePageTransition } from "@/components/PageTransition";
 
 const stagger = {
   hidden: {},
@@ -89,52 +91,45 @@ function TypeWriter({ text, delay = 0 }: { text: string; delay?: number }) {
 }
 
 export default function HomePage() {
+  const router = useRouter();
+  const { navigateTo, isTransitioning } = usePageTransition();
   const [showContent, setShowContent] = useState(false);
   const [existingUser, setExistingUser] = useState<string | null>(null);
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
+  const [isNavigating, setIsNavigating] = useState(false);
+  const hasNavigated = useRef(false);
 
   useEffect(() => {
     setExistingUser(localStorage.getItem("kidName"));
     const t = setTimeout(() => setShowContent(true), 150);
-    
-    // Connectivity Check for Voice AI
-    const checkBackend = async () => {
-      try {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-        const res = await fetch(`${API_BASE}/health`);
-        const data = await res.json();
-        console.log("🎙️ Voice AI System:", data.status === 'ok' ? "ONLINE ✓" : "OFFLINE ✗");
-      } catch (e) {
-        console.warn("🎙️ Voice AI System: OFFLINE (Check if backend npm run dev is running on port 5000)");
-      }
-    };
-    checkBackend();
+
+    // Prefetch play page for instant navigation
+    router.prefetch("/play");
 
     return () => clearTimeout(t);
-  }, []);
+  }, [router]);
 
   const [name, setName] = useState("");
 
-  const playWelcome = async (forceMessage?: string) => {
+  const playWelcome = useCallback(async (forceMessage?: string) => {
     try {
       const { playCachedTTS } = await import("@/lib/audio");
       const currentName = localStorage.getItem("kidName") || name;
-      const message = forceMessage || (currentName 
+      const message = forceMessage || (currentName
         ? `Hey! Welcome back, ${currentName}! Wolfie missed you so much! Are you ready for another magical voice adventure? Click the button and let's go!`
         : `Hi there! I'm Wolfie, your magical speech buddy! I can't wait to hear your beautiful voice. Type your name below so we can start our adventure together!`);
-      
-      // Use 'amx' for Wolfie (Warm Male Voice) for realism
-      await playCachedTTS(message, "amx"); 
-    } catch (e) {
-      console.error("Welcome voice failed", e);
+
+      await playCachedTTS(message, "amx");
+    } catch {
+      // Voice playback failed silently
     }
-  };
+  }, [name]);
 
   // Preload general welcome for returning users
   useEffect(() => {
     const currentName = localStorage.getItem("kidName");
     import("@/lib/audio").then(({ preloadTTS }) => {
-      const message = currentName 
+      const message = currentName
         ? `Hey! Welcome back, ${currentName}! Wolfie missed you so much! Are you ready for another magical voice adventure? Click the button and let's go!`
         : `Hi there! I'm Wolfie, your magical speech buddy! I can't wait to hear your beautiful voice. Type your name below so we can start our adventure together!`;
       preloadTTS(message, "amx");
@@ -143,26 +138,34 @@ export default function HomePage() {
 
   const [isShaking, setIsShaking] = useState(false);
 
-  const handleStart = async () => {
-    // 1. Validation for new users
+  const handleStart = useCallback(() => {
+    // Debounce: prevent double clicks
+    if (hasNavigated.current || isNavigating || isTransitioning) return;
+
+    // Validation for new users
     if (!existingUser && !name.trim()) {
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 500);
       return;
     }
 
+    // Lock navigation immediately
+    hasNavigated.current = true;
+    setIsNavigating(true);
+
     const cleanName = existingUser || name.trim();
     localStorage.setItem("kidName", cleanName);
-    
-    // Set flag for the Play page to give the verbal welcome
     sessionStorage.setItem("justLoggedIn", "true");
 
-    // GO IMMEDIATELY for best performance
-    window.location.href = "/play";
-  };
+    // Stop any playing audio before leaving
+    stopAllTTS();
+
+    // Use smooth page transition instead of hard reload
+    navigateTo("/play");
+  }, [existingUser, name, isNavigating, isTransitioning, navigateTo]);
 
   const resetUser = () => {
-    stopAllTTS(); // Stop any greeting immediately
+    stopAllTTS();
 
     toast("Switch explorer name?", {
       description: "Your current progress will be safe for that name!",
@@ -185,25 +188,23 @@ export default function HomePage() {
   // Trigger welcome on first interaction to bypass browser autoplay policy
   useEffect(() => {
     const handleFirstInteraction = (e: MouseEvent | TouchEvent) => {
-      // Don't play welcome if clicking a button (like Switch User)
       const target = e.target as HTMLElement;
       if (target.closest('button') || target.closest('a')) return;
 
       playWelcome();
-      
-      // Cleanup
+
       window.removeEventListener("mousedown", handleFirstInteraction);
       window.removeEventListener("touchstart", handleFirstInteraction);
     };
 
     window.addEventListener("mousedown", handleFirstInteraction);
     window.addEventListener("touchstart", handleFirstInteraction);
-    
+
     return () => {
       window.removeEventListener("mousedown", handleFirstInteraction);
       window.removeEventListener("touchstart", handleFirstInteraction);
     };
-  }, []);
+  }, [playWelcome]);
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -356,10 +357,10 @@ export default function HomePage() {
 
               {/* CTA & Actions Area */}
               <motion.div variants={fadeUp} className="flex flex-col items-center gap-6 mb-14 w-full max-w-lg mx-auto">
-                
+
                 {/* 1. Name Input Area (Top) */}
                 {!existingUser ? (
-                  <motion.div 
+                  <motion.div
                     animate={isShaking ? { x: [-5, 5, -5, 5, 0] } : {}}
                     transition={{ duration: 0.4 }}
                     className="w-full flex flex-col items-center gap-3"
@@ -379,7 +380,7 @@ export default function HomePage() {
                           isShaking ? "border-red-400" : "border-white focus:border-[#8B7FDE]"
                         }`}
                       />
-                      <motion.div 
+                      <motion.div
                         animate={name.trim() ? { scale: [1, 1.1, 1] } : {}}
                         transition={{ repeat: Infinity, duration: 2 }}
                         className="absolute -right-2 -top-2 bg-primary text-white p-2 rounded-full shadow-lg border-2 border-white scale-0 group-focus-within:scale-100 transition-transform"
@@ -393,10 +394,13 @@ export default function HomePage() {
                 {/* 2. Action Buttons Row (Below Name) */}
                 <div className="flex flex-row items-center justify-center gap-3 w-full">
                   <MagneticButton
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
+                    whileHover={!isNavigating ? { scale: 1.03 } : {}}
+                    whileTap={!isNavigating ? { scale: 0.95 } : {}}
                     onClick={handleStart}
-                    className="group relative flex-[1.5] max-w-[280px] px-6 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-lg shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer"
+                    disabled={isNavigating}
+                    className={`group relative flex-[1.5] max-w-[280px] px-6 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-lg shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer ${
+                      isNavigating ? "opacity-80 pointer-events-none" : ""
+                    }`}
                   >
                     <motion.div
                       className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
@@ -404,9 +408,18 @@ export default function HomePage() {
                       transition={{ duration: 3, repeat: Infinity, repeatDelay: 2 }}
                     />
                     <span className="relative z-10 flex items-center justify-center gap-2">
-                      <Sparkles size={18} />
-                      {existingUser ? "Let's Play!" : "Start Adventure"}
-                      <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                      {isNavigating ? (
+                        <>
+                          <div className="route-loader" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={18} />
+                          {existingUser ? "Let's Play!" : "Start Adventure"}
+                          <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                        </>
+                      )}
                     </span>
                   </MagneticButton>
 

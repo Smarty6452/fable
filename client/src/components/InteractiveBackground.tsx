@@ -1,9 +1,9 @@
 "use client";
 
 import { motion, useMotionValue, useTransform, useSpring } from "framer-motion";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { memo, useEffect, useState, useMemo, useCallback } from "react";
 
-export default function InteractiveBackground() {
+function InteractiveBackground() {
   const [isMounted, setIsMounted] = useState(false);
   const mouseX = useMotionValue(0.5);
   const mouseY = useMotionValue(0.5);
@@ -155,3 +155,5 @@ export default function InteractiveBackground() {
     </div>
   );
 }
+
+export default memo(InteractiveBackground);
