@@ -664,7 +664,7 @@ export default function PlayPage() {
             <div className="relative w-full max-w-sm mb-8">
               <input
                 type="text"
-                placeholder="Type your name..."
+                placeholder="Say your name..."
                 value={kidName}
                 onChange={(e) => setKidName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && kidName.trim() && saveOnboarding()}
