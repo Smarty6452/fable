@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import AudioVisualizer from "@/components/AudioVisualizer";
+import MicVisualizer from "@/components/MicVisualizer";
 import BuddySelector, { BUDDIES } from "@/components/BuddySelector";
 import BuddyMascot from "@/components/BuddyMascot";
 import InteractiveBackground from "@/components/InteractiveBackground";
@@ -18,6 +18,236 @@ import { preloadTTS, playCachedTTS } from "@/lib/audio";
 import { CHAPTERS, getUnlockedChapters, getCurrentChapter } from "@/data/chapters";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+
+interface Mission {
+  id: string;
+  word: string;
+  sound: string;
+  difficulty: "easy" | "medium" | "hard";
+  xp: number;
+  tip: string;
+  example: string;
+}
+
+interface UserStats {
+  xp: number;
+  level: number;
+  streak: number;
+  completedMissions: string[];
+}
+
+const DIFFICULTY_XP = { easy: 10, medium: 20, hard: 30 };
+
+export default function PlayPage() {
+  const { addNotification } = useNotifications();
+
+  // Refs
+  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Core Game State
+  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "success">("select");
+  const [selectedBuddy, setSelectedBuddy] = useState(BUDDIES[0]);
+  const [activeMission, setActiveMission] = useState<Mission | null>(null);
+  
+  // Audio/Voice State
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+
+  // Progress State
+  const [kidName, setKidName] = useState("");
+  const [xp, setXp] = useState(0);
+  const [level, setLevel] = useState(1);
+  const [streak, setStreak] = useState(0);
+  const [completedMissions, setCompletedMissions] = useState<string[]>([]);
+  
+  // UI State
+  const [voiceSpeed, setVoiceSpeed] = useState(1.0);
+  const [availableVoices, setAvailableVoices] = useState<any[]>([]);
+  const [mood, setMood] = useState<"happy" | "sad" | "surprised">("happy");
+  const [success, setSuccess] = useState(false);
+  const [attempts, setAttempts] = useState(0);
+  const [showTip, setShowTip] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState<{sender: 'buddy' | 'kid', text: string}[]>([]);
+
+  // Derived State
+  const xpForNextLevel = level * 100;
+  const unlockedChapters = useMemo(() => getUnlockedChapters(level), [level]);
+
+  // Load Saved Progress
+  useEffect(() => {
+    const savedName = localStorage.getItem("kidName");
+    const savedBuddy = localStorage.getItem("selectedBuddy");
+    const savedXp = localStorage.getItem("xp");
+    const savedLevel = localStorage.getItem("level");
+    const savedStreak = localStorage.getItem("streak");
+    const savedMissions = localStorage.getItem("completedMissions");
+
+    if (savedName) setKidName(savedName);
+    if (savedBuddy) setSelectedBuddy(JSON.parse(savedBuddy));
+    if (savedXp) setXp(parseInt(savedXp));
+    if (savedLevel) setLevel(parseInt(savedLevel));
+    if (savedStreak) setStreak(parseInt(savedStreak));
+    if (savedMissions) setCompletedMissions(JSON.parse(savedMissions));
+    
+    // Check Microphon access early (optional)
+    // navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
+  }, []);
+
+  // Fetch Available Voices
+  useEffect(() => {
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        setAvailableVoices(voices.map(v => ({ voiceId: v.name, displayName: v.name, gender: 'female' }))); // simplified for client-side
+      }
+    };
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
+
+  // Helper to stop all playing audio (TTS + Browser Speech)
+  const stopAllAudio = () => {
+    // 1. Browser Speech
+    window.speechSynthesis.cancel();
+    
+    // 2. Audio Elements
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+
+    // 3. Reset States
+    setIsSynthesizing(false);
+    setIsSpeaking(false);
+  };
+
+  const startListening = () => {
+    // 0. STOP ANY TALKING BUDDY FIRST
+    stopAllAudio();
+
+    // 1. Safety Check: Browser Support
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Voice not supported in this browser. Please use Chrome.");
+      return;
+    }
+
+    // 2. Cleanup: Stop any existing instance
+    if (recognitionRef.current) {
+      recognitionRef.current.abort();
+      recognitionRef.current = null;
+    }
+    
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
+
+    setTranscript("");
+    setSpeechError(null);
+    setIsListening(true);
+
+    const playPop = () => {
+       // ... existing pop sound logic (unchanged) ...
+       try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(600, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.05, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.1);
+      } catch (e) { /* ignore */ }
+    };
+    playPop();
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+    recognition.maxAlternatives = 5;
+
+    let hasResult = false;
+
+    recognition.onstart = () => {
+       setIsListening(true);
+       setSpeechError(null);
+    };
+
+    recognition.onresult = (event: any) => {
+      stopAllAudio(); // Ensure buddy stays quiet if they try to interrupt
+      const results = Array.from(event.results);
+      const transcriptItem = results[0] as any;
+      const text = transcriptItem[0].transcript;
+      setTranscript(text);
+      if (transcriptItem.isFinal) {
+        hasResult = true;
+        setIsListening(false);
+        checkResult(text);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      if (event.error === 'aborted') return;
+      console.error("Speech Recognition Error:", event.error);
+      setIsListening(false);
+      
+      const errorMap: Record<string, string> = {
+        'no-speech': "🎤 I didn't hear anything. Speak a bit louder!",
+        'audio-capture': "🎤 No microphone found. Is it plugged in?",
+        'not-allowed': "🔒 Microphone blocked. Check your browser settings.",
+        'network': "📶 Network error. Please check your internet.",
+      };
+      setSpeechError(errorMap[event.error] || "⚠️ Oops! Let's try that again.");
+      if (event.error === 'not-allowed') toast.error("Microphone access is blocked! 🔒");
+    };
+
+    recognition.onend = () => {
+      if (!hasResult) setIsListening(false);
+      recognitionRef.current = null;
+      // Note: We keep the stream open just a bit for visualizer fade out ideally, 
+      // but for simplicity/performance we stop tracks on unmount or next start.
+      // Or we can stop stream here to save battery. Let's stop it here.
+      if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+          setStream(null);
+      }
+    };
+
+    try {
+      recognition.start();
+
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(newStream => {
+        setStream(newStream);
+        
+        // Parallel Media Recorder for visualizer (keep simply for legacy or remove later)
+        // ... (removed old recorder/analyser logic to rely on MicVisualizer component) ...
+        
+      }).catch(err => {
+          console.warn("Mic stream failed", err);
+      });
+
+    } catch (err) {
+      console.error("Speech start error", err);
+      setIsListening(false);
+      setSpeechError("⚠️ Could not start microphone.");
+    }
+  };
 
 interface Mission {
   id: string;
