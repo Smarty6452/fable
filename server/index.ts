@@ -304,7 +304,7 @@ async function getOrCreateTherapyAgent(): Promise<string> {
 
   // Check for existing agent first
   try {
-    const agents = await client.listAgents(); // SDK method might vary, checking docs pattern
+    const agents = await client.getAgents();
     const existing = (agents as any).agents?.find?.((a: any) =>
       a.name === 'TalkyBuddy Progress Reporter'
     );
