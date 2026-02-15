@@ -421,7 +421,7 @@ export default function HomePage() {
                       </div>
                       <input
                         type="text"
-                        placeholder="Type your name here..."
+                        placeholder=""
                         value={name}
                         maxLength={15}
                         onChange={(e) => setName(e.target.value)}
@@ -441,15 +441,6 @@ export default function HomePage() {
                     >
                       {isListening ? <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity }}><Mic size={20} /></motion.div> : <Mic size={20} />}
                     </button>
-                    {!name.trim() && !isListening && (
-                       <motion.div
-                        animate={{ scale: [1, 1.1, 1] }} 
-                        transition={{ duration: 2, repeat: Infinity }}
-                        className="absolute right-16 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none hidden sm:block"
-                       >
-                         or say it! 
-                       </motion.div>
-                    )}
                     </div>
                   </motion.div>
                 ) : null}
