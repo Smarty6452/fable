@@ -304,8 +304,8 @@ async function getOrCreateTherapyAgent(): Promise<string> {
 
   // Check for existing agent first
   try {
-    const agents = await client.getAgents();
-    const existing = (agents.data as any)?.find?.((a: any) =>
+    const agents = await client.listAgents(); // SDK method might vary, checking docs pattern
+    const existing = (agents as any).agents?.find?.((a: any) =>
       a.name === 'TalkyBuddy Progress Reporter'
     );
     if (existing) {
@@ -317,22 +317,14 @@ async function getOrCreateTherapyAgent(): Promise<string> {
 
   const response = await client.createAgent({
     name: 'TalkyBuddy Progress Reporter',
-    description: 'AI speech therapy assistant that calls parents with progress updates on their child\'s pronunciation practice. Be warm, encouraging, and specific about which sounds the child is improving on.',
-    language: {
-      enabled: 'en' as any,
-      switching: false,
-      synthesizer: {
-        voiceConfig: { model: 'waves_lightning_large' as any, voiceId: 'emily' },
-        speed: 1.0,
-        consistency: 0.5,
-        similarity: 0,
-        enhancement: 1,
-      },
-    },
-    slmModel: 'electron-v1' as any,
+    agentDescription: 'AI speech therapy assistant providing progress updates to parents.', // Brief static description
+    voiceId: 'emily',
+    slmId: 'be04620a-5c24-4ba2-9856-c0d648e65a0b', // Specific SLM ID if needed, or default
+    maxDuration: 120, // 2 minutes max
+    initialMessage: "Hi! This is Fable, your child's speech buddy. Is this a good time for a quick progress update?",
   });
 
-  cachedAgentId = (response as any).data;
+  cachedAgentId = (response as any).id || (response as any).data?.id;
   console.log(`✅ Created Atoms agent: ${cachedAgentId}`);
   return cachedAgentId!;
 }
@@ -369,16 +361,34 @@ app.post('/api/atoms/call-parent', async (req, res) => {
     const agentId = await getOrCreateTherapyAgent();
     const client = await getAtomsClient();
 
-    // Update agent description with current child data before calling
+    // Generate a highly specific prompt for the call
+    const prompt = `
+Role: You are Fable, a cheerful and professional AI speech therapy assistant.
+Goal: Call the parent of ${kidName} to give a structured 1-minute update.
+Context:
+- Child: ${kidName}
+- Recent Activity: ${total} sessions checked.
+- Accuracy: ${successRate}% (Goal: 80%+)
+- Sounds Practiced: ${sounds.join(', ') || 'General basics'}
+- Areas to Improve: ${nearMisses} near-misses detected (encourage precision).
+
+Script Flow:
+1. Greet warmly and confirm you're calling about ${kidName}.
+2. Give the "Headline": "${kidName} practiced ${sounds.length} sounds today with ${successRate}% accuracy!"
+3. Give one specific win: "They did great with the '${sounds[0] || 'S'}' sound."
+4. Give one tip: "We're working on clearer endings for words."
+5. Close: "Thanks for letting them play Fable! Have a wonderful day!"
+
+Tone: Warm, concise, encouraging. Do NOT be robotic. Be human-like and quick.
+    `;
+
+    // Update agent description/prompt with specific child data
     try {
       await client.updateAgent(agentId, {
-        description: `You are calling the parent of ${kidName} with a speech therapy progress report.
-Stats: ${total} sessions, ${successRate}% success rate, ${nearMisses} near-misses.
-Sounds practiced: ${sounds.join(', ') || 'None yet'}.
-${successRate >= 70 ? `${kidName} is doing great! Highlight their progress.` : `${kidName} needs more practice. Be encouraging and suggest specific exercises.`}
-Keep the call brief (under 2 minutes). Be warm and professional.`,
+        agentDescription: prompt, 
+        voiceId: 'emily',
       });
-    } catch (_) { /* agent update is best-effort */ }
+    } catch (e) { console.warn("Agent update warn:", e); }
 
     // Place the call
     const callResponse = await client.startOutboundCall({

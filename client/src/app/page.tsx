@@ -110,6 +110,43 @@ export default function HomePage() {
   }, [router]);
 
   const [name, setName] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
+
+  const startListening = () => {
+    // Check browser support
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRecognition) {
+      toast.error("Voice input needs Chrome/Edge!");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    
+    recognition.onresult = (event: any) => {
+      const text = event.results[0][0].transcript;
+      const cleanName = text.replace(/[.,!]/g, "").trim();
+      if (cleanName) {
+        setName(cleanName);
+        playWelcome(`Nice to meet you, ${cleanName}!`);
+      }
+    };
+
+    recognition.start();
+  };
 
   const playWelcome = useCallback(async (forceMessage?: string) => {
     try {
@@ -377,16 +414,29 @@ export default function HomePage() {
                         onChange={(e) => setName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleStart()}
                         className={`w-full px-8 py-5 bg-white/60 backdrop-blur-xl rounded-[2rem] border-4 outline-none text-xl font-black text-slate-800 shadow-xl transition-all placeholder:text-slate-300 text-center ${
-                          isShaking ? "border-red-400" : "border-white focus:border-[#8B7FDE]"
-                        }`}
-                      />
-                      <motion.div
-                        animate={name.trim() ? { scale: [1, 1.1, 1] } : {}}
-                        transition={{ repeat: Infinity, duration: 2 }}
-                        className="absolute -right-2 -top-2 bg-primary text-white p-2 rounded-full shadow-lg border-2 border-white scale-0 group-focus-within:scale-100 transition-transform"
-                      >
-                        <Heart size={16} fill="white" />
-                      </motion.div>
+                        isShaking ? "border-red-400" : "border-white focus:border-[#8B7FDE]"
+                      }`}
+                    />
+                    <button
+                      onClick={startListening}
+                      className={`absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full transition-all shadow-lg ${
+                        isListening 
+                          ? "bg-red-500 text-white animate-pulse shadow-red-300" 
+                          : "bg-white/80 text-primary hover:bg-primary hover:text-white"
+                      }`}
+                      title="Say your name!"
+                    >
+                      {isListening ? <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity }}><Mic size={20} /></motion.div> : <Mic size={20} />}
+                    </button>
+                    {!name.trim() && !isListening && (
+                       <motion.div
+                        animate={{ scale: [1, 1.1, 1] }} 
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className="absolute right-16 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 pointer-events-none hidden sm:block"
+                       >
+                         or say it! 
+                       </motion.div>
+                    )}
                     </div>
                   </motion.div>
                 ) : null}
