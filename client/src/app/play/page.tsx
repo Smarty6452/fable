@@ -166,6 +166,10 @@ export default function PlayPage() {
     window.location.reload();
   };
 
+  const [mood, setMood] = useState<"happy" | "sad" | "surprised">("happy");
+
+  // ... (previous effects)
+
   const startPractice = (mission: Mission) => {
     setActiveMission(mission);
     setGameState("practice");
@@ -173,6 +177,7 @@ export default function PlayPage() {
     setSuccess(false);
     setAttempts(0);
     setShowTip(false);
+    setMood("happy"); // Reset mood on new mission
     speakFirstTime(mission);
   };
 
@@ -187,7 +192,6 @@ export default function PlayPage() {
     await playTTS(text);
   };
 
-  // Browser SpeechSynthesis fallback
   const playTTSFallback = (text: string): Promise<void> => {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) {
@@ -199,7 +203,6 @@ export default function PlayPage() {
       utterance.rate = voiceSpeed;
       utterance.pitch = 1.1;
       utterance.volume = 1;
-      // Try to find a good English voice
       const voices = window.speechSynthesis.getVoices();
       const preferred = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'))
         || voices.find(v => v.lang.startsWith('en-US'))
@@ -212,14 +215,12 @@ export default function PlayPage() {
   };
 
   const getVoiceForBuddy = (buddyId: string) => {
-    // If we have fetched voices, try to find a match by common names
     if (availableVoices.length > 0) {
       const findVoice = (nameParts: string[]) => {
         return availableVoices.find(v => 
           nameParts.some(part => v.voiceId.toLowerCase().includes(part) || v.displayName.toLowerCase().includes(part))
         )?.voiceId;
       };
-
       switch (buddyId) {
         case "cat": return findVoice(["emily", "sarah", "female"]) || availableVoices[0].voiceId;
         case "panda": return findVoice(["roma", "nyah", "female"]) || availableVoices[0].voiceId;
@@ -229,8 +230,6 @@ export default function PlayPage() {
         default: return availableVoices[0].voiceId;
       }
     }
-
-    // Fallback hardcoded mapping - using more common IDs for Smallest AI
     switch (buddyId) {
       case "cat": return "emily";   
       case "panda": return "sarah"; 
@@ -245,7 +244,6 @@ export default function PlayPage() {
     setIsSynthesizing(true);
     try {
       const voiceId = getVoiceForBuddy(selectedBuddy.id);
-
       const res = await fetch(`${API_BASE}/tts`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -254,7 +252,6 @@ export default function PlayPage() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        console.warn("TTS API Error:", errorData);
         if (errorData.useFallback) {
           toast.error("AI Voice unavailable, using backup!");
           await playTTSFallback(text);
@@ -278,7 +275,6 @@ export default function PlayPage() {
         URL.revokeObjectURL(audioUrl);
       };
       await audio.play();
-
     } catch (error: any) {
       console.warn("TTS failed, using fallback:", error.message);
       await playTTSFallback(text);
@@ -287,62 +283,35 @@ export default function PlayPage() {
   };
 
   const previewWord = () => {
-    if (activeMission) {
-      playTTS(`${activeMission.word}`);
-    }
+    if (activeMission) playTTS(`${activeMission.word}`);
   };
 
   const startListening = () => {
-    // Check browser support
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
     if (!SpeechRecognition) {
       toast.error("Your browser doesn't support voice! Try Chrome.");
       return;
     }
-
     setTranscript("");
     setSpeechError(null);
-    setIsListening(true); // Optimistic update
-
+    setIsListening(true);
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
-    
     recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = "en-US";
-
     recognition.onresult = (event: any) => {
       const results = Array.from(event.results);
-      const text = results
-        .map((result: any) => result[0])
-        .map((result: any) => result.transcript)
-        .join("");
-      
+      const text = results.map((result: any) => result[0]).map((result: any) => result.transcript).join("");
       setTranscript(text);
-      
-      // Only check result if it's final
-      if ((results[0] as any).isFinal) {
-        checkResult(text);
-      }
+      if ((results[0] as any).isFinal) checkResult(text);
     };
-
     recognition.onerror = (event: any) => {
-      // Ignore 'aborted' completely as it's part of manual stop
-      if (event.error === 'aborted') {
-        setIsListening(false);
-        return;
-      }
-
+      if (event.error === 'aborted') { setIsListening(false); return; }
       console.error("Speech Recognition Error:", event.error);
       setIsListening(false);
-      
       if (event.error === 'no-speech') {
-        const messages = [
-          "Oops! I didn't hear anything. Speak louder? 🎤",
-          "My ears are wiggling but I didn't catch that! 👂",
-          "Can you say that again? I'm listening! ✨",
-          "Don't be shy! Give it another try! 🌈"
-        ];
+        const messages = ["Oops! I didn't hear anything. Speak louder? 🎤", "My ears are wiggling but I didn't catch that! 👂"];
         setSpeechError(messages[Math.floor(Math.random() * messages.length)]);
       } else if (event.error === 'not-allowed') {
         setSpeechError("I need your permission to hear you! 🔓");
@@ -353,43 +322,26 @@ export default function PlayPage() {
         setSpeechError("Oops! My robot brain got a bit confused.");
       }
     };
-
     recognition.onend = () => {
       setIsListening(false);
       recognitionRef.current = null;
-      // Stop MediaRecorder if still running when recognition ends
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop();
-      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") mediaRecorderRef.current.stop();
     };
-
     try {
       recognition.start();
-
-      // Start recording actual audio
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
         const mediaRecorder = new MediaRecorder(stream);
         mediaRecorderRef.current = mediaRecorder;
         audioChunksRef.current = [];
-
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
-          }
-        };
-
+        mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
         mediaRecorder.onstop = () => {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
           const audioUrl = URL.createObjectURL(audioBlob);
           setRecordedAudioUrl(audioUrl);
-
-          // Release mic - stop all tracks so browser mic indicator turns off
           stream.getTracks().forEach(track => track.stop());
         };
-
         mediaRecorder.start();
       });
-
     } catch (err) {
       console.error("Speech start error", err);
       setIsListening(false);
@@ -399,28 +351,12 @@ export default function PlayPage() {
   const toggleListening = () => {
     if (isListening) {
       if (recognitionRef.current) recognitionRef.current.abort();
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop();
-      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") mediaRecorderRef.current.stop();
       setIsListening(false);
     } else {
       startListening();
     }
   };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, []);
-
 
   const checkResult = async (text: string) => {
     if (!activeMission) return;
@@ -431,10 +367,10 @@ export default function PlayPage() {
     
     console.log(`🎙️ Hearing: "${normalizedText}" | Target: "${targetWord}"`);
 
-    // Improved matching logic (fuzzy match for similar sounds)
+    // Improved matching logic
     const isCorrect = normalizedText.includes(targetWord) || 
                      (targetWord === "cake" && (normalizedText.includes("kake") || normalizedText.includes("take"))) ||
-                     (targetWord === "sun" && normalizedText.includes("son")) || // Common homophones
+                     (targetWord === "sun" && normalizedText.includes("son")) ||
                      normalizedText === targetWord;
     
     const containsSound = normalizedText.includes(targetSound) || 
@@ -471,13 +407,12 @@ export default function PlayPage() {
     let feedback = "";
     if (isCorrect) {
       setSuccess(true);
+      setMood("happy"); // Happy buddy!
       feedback = `YES! That was perfect! You nailed the "${activeMission.sound}" in ${activeMission.word}!`;
-      // ... (streak/xp code remains same, triggered by effect or inline)
       
       const confetti = (await import("canvas-confetti")).default;
       confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
 
-      // Update XP/Streak/Level... (Previous logic)
       const newStreak = streak + 1;
       setStreak(newStreak);
       localStorage.setItem("streak", newStreak.toString());
@@ -489,6 +424,8 @@ export default function PlayPage() {
       if (newXp >= level * 100) {
         setLevel(l => l + 1);
         triggerLevelUpNotification(level + 1, addNotification);
+      } else if (newStreak % 3 === 0) {
+        triggerStreakNotification(newStreak, addNotification);
       }
       
       const newCompleted = [...new Set([...completedMissions, activeMission.id])];
@@ -496,21 +433,40 @@ export default function PlayPage() {
       localStorage.setItem("completedMissions", JSON.stringify(newCompleted));
 
     } else if (isNearMiss) {
+       setMood("surprised"); // Encouraging/Curious look
        feedback = `So close! I heard the "${activeMission.sound}" sound, but let's try to say the whole word "${activeMission.word}" clearly.`;
        if (newAttempts >= 2) setShowTip(true);
     } else {
+       // Wrong Answer Handling
+       setMood("sad"); // Sad buddy :(
+       
+       // Deduct XP (Penalty)
+       if (xp > 5) {
+         setXp(prev => Math.max(0, prev - 5)); // Lose 5 XP
+         toast.error("Oops! -5 XP. Try again!", { duration: 2000 });
+       }
+
+       // Reset Streak
+       if (streak > 0) {
+         setStreak(0);
+         localStorage.setItem("streak", "0");
+         toast("Streak lost! 😢", { icon: "💔" });
+       }
+
        // Adaptive speed for failure
        if (newAttempts >= 2 && voiceSpeed > 0.7) setVoiceSpeed(0.7);
        
+       const sadNoises = ["Oh no!", "Oopsie!", "Uh oh!"];
+       const sadPrefix = sadNoises[Math.floor(Math.random() * sadNoises.length)];
+
        if (newAttempts === 1) {
-         feedback = `Nice try! Remember, for ${activeMission.word}, ${activeMission.tip}`;
+         feedback = `${sadPrefix} Not quite. Remember, for ${activeMission.word}, ${activeMission.tip}`;
        } else if (newAttempts === 2) {
-         feedback = `Let's slow down. Listen to me: ${activeMission.sound}... ${activeMission.word}. Now you try!`;
+         feedback = `${sadPrefix} Let's slow down. Listen to me: ${activeMission.sound}... ${activeMission.word}. Now you try!`;
        } else {
          feedback = `Don't give up! Look at my mouth. ${activeMission.example}. Try one more time!`;
        }
        if (newAttempts >= 2) setShowTip(true);
-       setStreak(0);
     }
 
     // Add to conversation history
@@ -521,6 +477,11 @@ export default function PlayPage() {
     ]);
 
     await playTTS(feedback);
+    
+    // Reset mood after speech if it was sad
+    if (!isCorrect && !isNearMiss) {
+      setTimeout(() => setMood("happy"), 4000); 
+    }
   };
 
   const currentLevelXp = xp % xpForNextLevel;
@@ -785,6 +746,7 @@ export default function PlayPage() {
                 isSynthesizing={isSynthesizing} 
                 buddyType={selectedBuddy.id}
                 size={300} 
+                mood={mood}
               />
               
               <div className="absolute -bottom-4 right-0 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-400 border border-white shadow-sm flex items-center gap-1.5 pointer-events-none">

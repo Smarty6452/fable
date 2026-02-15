@@ -8,13 +8,15 @@ interface BuddyMascotProps {
   isListening: boolean;
   isSynthesizing: boolean;
   size?: number;
+  mood?: "happy" | "sad" | "surprised";
 }
 
 export default function BuddyMascot({ 
   buddyType, 
   isListening, 
   isSynthesizing, 
-  size = 280 
+  size = 280,
+  mood = "happy"
 }: BuddyMascotProps) {
   const [blink, setBlink] = useState(false);
   const mouseX = useMotionValue(0);
@@ -216,12 +218,15 @@ export default function BuddyMascot({
         {/* Head Base */}
         {config.faceShape}
 
-        {/* Eyes Group */}
+        {/* Eyes Group - Modify for Sad Mood */}
         <g>
           {/* Left Eye */}
           <g transform="translate(100, 130)">
             {blink ? (
               <path d="M-15 0 Q0 10, 15 0" stroke="#2D3436" strokeWidth="4" fill="none" strokeLinecap="round" />
+            ) : mood === "sad" ? (
+               // Sad eyes (downward curve)
+              <path d="M-12 -5 Q0 -15, 12 -5" stroke="#2D3436" strokeWidth="4" fill="none" strokeLinecap="round" />
             ) : (
               <>
                 <ellipse role="img" cx="0" cy="0" rx="14" ry="16" fill="white" />
@@ -239,6 +244,9 @@ export default function BuddyMascot({
           <g transform="translate(180, 130)">
             {blink ? (
               <path d="M-15 0 Q0 10, 15 0" stroke="#2D3436" strokeWidth="4" fill="none" strokeLinecap="round" />
+            ) : mood === "sad" ? (
+              // Sad eyes (downward curve)
+               <path d="M-12 -5 Q0 -15, 12 -5" stroke="#2D3436" strokeWidth="4" fill="none" strokeLinecap="round" />
             ) : (
               <>
                 <ellipse role="img" cx="0" cy="0" rx="14" ry="16" fill="white" />
@@ -256,18 +264,22 @@ export default function BuddyMascot({
         {/* Nose */}
         <ellipse cx="140" cy="165" rx="12" ry="8" fill="#2D3436" />
 
-        {/* Mouth */}
+        {/* Mouth - Responsive to Mood */}
         <motion.path
           fill={isSynthesizing ? "#D63031" : "none"}
           stroke="#2D3436"
           strokeWidth="3"
           strokeLinecap="round"
           initial="idle"
-          animate={isSynthesizing ? "talking" : "idle"}
+          animate={isSynthesizing ? "talking" : mood === "sad" ? "sad" : "idle"}
           variants={{
             idle: { 
               d: "M125 185 Q140 195, 155 185",
               transition: { duration: 0.2 }
+            },
+            sad: {
+              d: "M125 195 Q140 185, 155 195", // Reverse curve for frown
+              transition: { duration: 0.4 }
             },
             talking: {
               d: [
