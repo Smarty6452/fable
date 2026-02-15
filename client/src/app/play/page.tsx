@@ -256,11 +256,12 @@ export default function PlayPage() {
     let intro = `Hi! I'm ${buddy.name}! Let's play!`;
     
     switch(buddyId) {
-      case "wolf": intro = "Hi there! I'm Wolfie! I'm ready to howl with fun!"; break;
-      case "cat": intro = "Meow! I'm Luna. You are purr-fect!"; break;
-      case "robot": intro = "Beep boop. I am Bolt. Ready to process words."; break;
-      case "puppy": intro = "Woof woof! I'm Max! Let's play catch with words!"; break;
-      case "panda": intro = "Hello friend. I'm Mochi. Let's learn together."; break;
+      case "wolf": intro = "Hi! I'm Wolfie! I can't wait to hear your awesome voice!"; break;
+      case "cat": intro = "Meow! I'm Luna. You sound purr-fectly wonderful!"; break;
+      case "robot": intro = "Beep boop. I am Bolt. Analyzing fun levels... Maximum!"; break;
+      case "puppy": intro = "Woof woof! I'm Max! Let's play catch with some words!"; break;
+      case "panda": intro = "Hello friend. I'm Mochi. Let's take our time and learn."; break;
+    }
     }
     
     playTTS(intro, voiceId);
