@@ -104,46 +104,37 @@ export default function GuidedTour({ steps, onComplete, storageKey }: GuidedTour
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Click Handler Overlay (Transparent) */}
+          {/* Overlay with Cutout effect using mixed-blend-mode or simple layering */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 cursor-pointer"
+            className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-40"
             onClick={handleSkip}
           />
 
-          {/* Highlight & Dimmer */}
+          {/* Highlight (Transparent Hole) */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ 
-              opacity: 1, 
-              scale: 1,
-              boxShadow: "0 0 0 9999px rgba(0,0,0,0.85)" 
-            }}
-            exit={{ opacity: 0, scale: 1.05 }}
-            className="fixed z-50 pointer-events-none"
-            style={{
-              top: targetRect.top - 8,
-              left: targetRect.left - 8,
-              width: targetRect.width + 16,
-              height: targetRect.height + 16,
-              borderRadius: "1.5rem",
-            }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
+             initial={{ opacity: 0, scale: 0.95 }}
+             animate={{ 
+               opacity: 1, 
+               scale: 1,
+               boxShadow: "0 0 0 9999px rgba(0,0,0,0.7), 0 0 15px rgba(0,0,0,0.5)" // The trick to create a hole
+             }}
+             exit={{ opacity: 0, scale: 1.05 }}
+             className="fixed z-50 pointer-events-none"
+             style={{
+               top: targetRect.top - 8,
+               left: targetRect.left - 8,
+               width: targetRect.width + 16,
+               height: targetRect.height + 16,
+               borderRadius: "1rem", // Tighter radius
+               boxShadow: "0 0 0 9999px rgba(0,0,0,0.7)" // Fallback static shadow
+             }}
+             transition={{ duration: 0.4, ease: "easeOut" }}
           >
-            {/* Pulsing Border Glow */}
-            <motion.div
-              className="absolute inset-0 rounded-[1.5rem] border-[4px] border-white"
-              animate={{ 
-                boxShadow: [
-                  "0 0 20px rgba(255,255,255,0.3)",
-                  "0 0 40px rgba(255,255,255,0.6)",
-                  "0 0 20px rgba(255,255,255,0.3)"
-                ] 
-              }}
-              transition={{ duration: 1.5, repeat: Infinity }}
-            />
+            {/* Border to emphasize the active area */}
+            <div className="absolute inset-0 rounded-[1rem] border-2 border-white/50 shadow-[0_0_20px_rgba(255,255,255,0.3)] animate-pulse" />
           </motion.div>
 
           {/* Tooltip */}
