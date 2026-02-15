@@ -13,7 +13,6 @@ import BuddySelector, { BUDDIES } from "@/components/BuddySelector";
 import BuddyMascot from "@/components/BuddyMascot";
 import InteractiveBackground from "@/components/InteractiveBackground";
 import GuidedTour, { PLAY_TOUR_STEPS } from "@/components/GuidedTour";
-import WolfieMascot from "@/components/WolfieMascot";
 import { NotificationBell, useNotifications, triggerLevelUpNotification, triggerStreakNotification } from "@/components/NotificationBell";
 import { preloadTTS, playCachedTTS, stopAllTTS } from "@/lib/audio";
 import { CHAPTERS, getUnlockedChapters, getCurrentChapter } from "@/data/chapters";
@@ -44,7 +43,6 @@ export default function PlayPage() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification } = useNotifications();
 
   // Core Game State
-  const [isNavigating, setIsNavigating] = useState(false);
   const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "ending">("onboarding");
   const [selectedBuddy, setSelectedBuddy] = useState(BUDDIES[0]);
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
@@ -110,13 +108,36 @@ export default function PlayPage() {
       
       setGameState("select");
 
+      // Verbal Greeting Hand-off from Homepage
+      const checkGreeting = async () => {
+        const isNewSession = sessionStorage.getItem("justLoggedIn");
+        if (isNewSession) {
+          sessionStorage.removeItem("justLoggedIn");
+          const name = localStorage.getItem("kidName") || "Explorer";
+          
+          // Emotional, high-stakes greeting on landing
+          const greetingText = `Hi ${name}! I am so happy you are here! Pick your spirit buddy below to start our magical voice adventure!`;
+          
+          // Use a small delay so the user is settled on the page before Wolfie starts talking
+          setTimeout(async () => {
+            await playTTS(greetingText);
+            
+            // Add a small guidance line after greeting for first-time vibes
+            setTimeout(() => {
+              playTTS("I'll be waiting in the missions whenever you're ready!");
+            }, 800);
+          }, 600);
+        }
+      };
+      checkGreeting();
+
       // Add welcome notification if none exist
       const welcomeKey = "talkybuddy-welcome-notified";
       if (!localStorage.getItem(welcomeKey)) {
         addNotification({
           type: "reward",
-          title: "Welcome back! 🎁",
-          message: "Ready for another adventure? Let's practice some sounds!",
+          title: "Welcome! 🎁",
+          message: "Ready for an adventure? Let's practice some sounds!",
         });
         localStorage.setItem(welcomeKey, "true");
       }
@@ -369,10 +390,7 @@ export default function PlayPage() {
           stopAllTTS(); // Stop any speech
           localStorage.removeItem("kidName");
           localStorage.removeItem("selectedBuddy");
-          setIsNavigating(true);
-          setTimeout(() => {
-            window.location.href = "/";
-          }, 500);
+          window.location.href = "/";
         }
       },
       cancel: {
@@ -463,42 +481,48 @@ export default function PlayPage() {
   };
 
 
-  const playTTS = async (text: string) => {
+  const playTTS = async (text: string): Promise<void> => {
     stopAllTTS(); // Stop any background hover sounds immediately
     setIsSynthesizing(true);
-    try {
-      const voiceId = getVoiceForBuddy(selectedBuddy.id);
-      const audioUrl = await preloadTTS(text, voiceId);
-      
-      if (!audioUrl) {
-        console.warn("Preload failed, using fallback");
-        await playTTSFallback(text);
-        setIsSynthesizing(false);
-        setIsSpeaking(false);
-        return;
-      }
+    
+    return new Promise(async (resolve) => {
+      try {
+        const voiceId = getVoiceForBuddy(selectedBuddy.id);
+        const audioUrl = await preloadTTS(text, voiceId);
+        
+        if (!audioUrl) {
+          console.warn("Preload failed, using fallback");
+          await playTTSFallback(text);
+          setIsSynthesizing(false);
+          setIsSpeaking(false);
+          return resolve();
+        }
 
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-      
-      audio.onplay = () => setIsSpeaking(true);
-      audio.onended = () => {
-        setIsSpeaking(false);
-        setIsSynthesizing(false);
-      };
-      audio.onerror = async () => {
-        setIsSpeaking(false);
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+        
+        audio.onplay = () => setIsSpeaking(true);
+        audio.onended = () => {
+          setIsSpeaking(false);
+          setIsSynthesizing(false);
+          resolve();
+        };
+        audio.onerror = async () => {
+          setIsSpeaking(false);
+          await playTTSFallback(text);
+          setIsSynthesizing(false);
+          resolve();
+        };
+        
+        await audio.play();
+      } catch (error: any) {
+        console.warn("TTS flow error, using fallback:", error.message);
         await playTTSFallback(text);
         setIsSynthesizing(false);
-      };
-      
-      await audio.play();
-    } catch (error: any) {
-      console.warn("TTS flow error, using fallback:", error.message);
-      await playTTSFallback(text);
-      setIsSynthesizing(false);
-      setIsSpeaking(false);
-    }
+        setIsSpeaking(false);
+        resolve();
+      }
+    });
   };
 
   const previewWord = () => {
@@ -1187,38 +1211,6 @@ export default function PlayPage() {
                   GOT IT, RELOAD!
                 </button>
              </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      {/* Page Transition Loader */}
-      <AnimatePresence>
-        {isNavigating && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center"
-          >
-            <div className="relative mb-8">
-              <WolfieMascot size={200} />
-              <motion.div
-                className="absolute inset-x-0 -bottom-4 flex justify-center gap-1"
-                animate={{ opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              >
-                {[0, 1, 2].map(i => (
-                  <div key={i} className="w-2 h-2 bg-primary rounded-full" />
-                ))}
-              </motion.div>
-            </div>
-            
-            <motion.h2
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-3xl font-black text-slate-800 tracking-tight"
-            >
-              Coming Home...
-            </motion.h2>
           </motion.div>
         )}
       </AnimatePresence>

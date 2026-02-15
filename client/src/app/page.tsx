@@ -90,7 +90,6 @@ function TypeWriter({ text, delay = 0 }: { text: string; delay?: number }) {
 
 export default function HomePage() {
   const [showContent, setShowContent] = useState(false);
-  const [isNavigating, setIsNavigating] = useState(false);
   const [existingUser, setExistingUser] = useState<string | null>(null);
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
 
@@ -131,15 +130,15 @@ export default function HomePage() {
     }
   };
 
-  // Preload welcome message for instant playback on click
+  // Preload general welcome for returning users
   useEffect(() => {
     const currentName = localStorage.getItem("kidName");
-    if (currentName) {
-      import("@/lib/audio").then(({ preloadTTS }) => {
-        const message = `Hey! Welcome back, ${currentName}! Wolfie missed you so much! Are you ready for another magical voice adventure? Click the button and let's go!`;
-        preloadTTS(message, "amx");
-      });
-    }
+    import("@/lib/audio").then(({ preloadTTS }) => {
+      const message = currentName 
+        ? `Hey! Welcome back, ${currentName}! Wolfie missed you so much! Are you ready for another magical voice adventure? Click the button and let's go!`
+        : `Hi there! I'm Wolfie, your magical speech buddy! I can't wait to hear your beautiful voice. Type your name below so we can start our adventure together!`;
+      preloadTTS(message, "amx");
+    });
   }, []);
 
   const [isShaking, setIsShaking] = useState(false);
@@ -152,46 +151,14 @@ export default function HomePage() {
       return;
     }
 
-    // 2. Logic for existing local user
-    if (existingUser) {
-      // Play a warm return greeting and WAIT
-      await playWelcome(`Perfect! Welcome back ${existingUser}! Wolfie is so ready to continue our adventure. Let's go!`);
-      
-      setIsNavigating(true);
-      setTimeout(() => {
-        window.location.href = "/play";
-      }, 500);
-      return;
-    }
+    const cleanName = existingUser || name.trim();
+    localStorage.setItem("kidName", cleanName);
+    
+    // Set flag for the Play page to give the verbal welcome
+    sessionStorage.setItem("justLoggedIn", "true");
 
-    // 3. Logic for new/returning name entry
-    if (name.trim()) {
-      const cleanName = name.trim();
-      localStorage.setItem("kidName", cleanName);
-      
-      try {
-        // QUICK CHECK: Is this a returning user (name in DB)?
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
-        const res = await fetch(`${API_BASE}/stats?kid=${cleanName}`);
-        const stats = await res.json();
-        
-        if (stats.success && stats.total > 0) {
-          // Emotional "I remember you!" message
-          await playWelcome(`Oh, Wolfie remembers you, ${cleanName}! Welcome back! I'm so happy you're here to practice again!`);
-        } else {
-          // Magical first-time meeting message
-          await playWelcome(`Hi ${cleanName}! I'm Wolfie, your magical speech buddy! I am so happy to meet you. Let's start our first adventure together!`);
-        }
-      } catch (e) {
-        // Fallback for offline/error
-        await playWelcome(`Great to meet you, ${cleanName}! Let's go!`);
-      }
-
-      setIsNavigating(true);
-      setTimeout(() => {
-        window.location.href = "/play";
-      }, 500);
-    }
+    // GO IMMEDIATELY for best performance
+    window.location.href = "/play";
   };
 
   const resetUser = () => {
@@ -217,16 +184,25 @@ export default function HomePage() {
 
   // Trigger welcome on first interaction to bypass browser autoplay policy
   useEffect(() => {
-    const handleFirstClick = (e: MouseEvent) => {
+    const handleFirstInteraction = (e: MouseEvent | TouchEvent) => {
       // Don't play welcome if clicking a button (like Switch User)
       const target = e.target as HTMLElement;
       if (target.closest('button') || target.closest('a')) return;
 
       playWelcome();
-      window.removeEventListener("click", handleFirstClick);
+      
+      // Cleanup
+      window.removeEventListener("mousedown", handleFirstInteraction);
+      window.removeEventListener("touchstart", handleFirstInteraction);
     };
-    window.addEventListener("click", handleFirstClick);
-    return () => window.removeEventListener("click", handleFirstClick);
+
+    window.addEventListener("mousedown", handleFirstInteraction);
+    window.addEventListener("touchstart", handleFirstInteraction);
+    
+    return () => {
+      window.removeEventListener("mousedown", handleFirstInteraction);
+      window.removeEventListener("touchstart", handleFirstInteraction);
+    };
   }, []);
 
   return (
@@ -396,6 +372,7 @@ export default function HomePage() {
                         type="text"
                         placeholder="Type your name here..."
                         value={name}
+                        maxLength={15}
                         onChange={(e) => setName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleStart()}
                         className={`w-full px-8 py-5 bg-white/60 backdrop-blur-xl rounded-[2rem] border-4 outline-none text-xl font-black text-slate-800 shadow-xl transition-all placeholder:text-slate-300 text-center ${
@@ -607,40 +584,6 @@ export default function HomePage() {
           )}
         </AnimatePresence>
       </div>
-
-      {/* Page Transition Loader */}
-      <AnimatePresence mode="wait">
-        {isNavigating && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] bg-white/90 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center"
-          >
-            <div className="relative mb-8">
-              <WolfieMascot size={200} />
-              <motion.div
-                className="absolute inset-x-0 -bottom-4 flex justify-center gap-1"
-                animate={{ opacity: [0.4, 1, 0.4] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              >
-                {[0, 1, 2].map(i => (
-                  <div key={i} className="w-2 h-2 bg-primary rounded-full" />
-                ))}
-              </motion.div>
-            </div>
-            
-            <motion.h2
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-3xl font-black text-slate-800 tracking-tight"
-            >
-              Loading Adventure...
-            </motion.h2>
-            <p className="text-slate-500 font-bold mt-2">Getting the sound missions ready for you!</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
