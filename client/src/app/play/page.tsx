@@ -14,6 +14,7 @@ import BuddyMascot from "@/components/BuddyMascot";
 import InteractiveBackground from "@/components/InteractiveBackground";
 import GuidedTour, { PLAY_TOUR_STEPS } from "@/components/GuidedTour";
 import { NotificationBell, useNotifications, triggerLevelUpNotification, triggerStreakNotification } from "@/components/NotificationBell";
+import { preloadTTS, playCachedTTS } from "@/lib/audio";
 import { CHAPTERS, getUnlockedChapters, getCurrentChapter } from "@/data/chapters";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
@@ -761,6 +762,7 @@ export default function PlayPage() {
                     whileHover={{ scale: 1.05, y: -5 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => startPractice(mission)}
+                    onMouseEnter={() => playCachedTTS(mission.word, getVoiceForBuddy(selectedBuddy.id))}
                     className="relative bg-white/80 backdrop-blur-xl p-8 rounded-[3rem] border-4 border-white shadow-xl hover:shadow-2xl transition-all group"
                   >
                     {isCompleted && (

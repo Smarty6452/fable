@@ -466,7 +466,13 @@ export default function ParentDashboard() {
                       className="px-6 py-3 bg-gradient-to-r from-primary to-purple-600 rounded-2xl text-white font-black text-sm shadow-lg border-2 border-white disabled:opacity-40 flex items-center gap-2"
                     >
                       {callStatus === "calling" ? (
-                        <><Loader2 size={16} className="animate-spin" /> Calling...</>
+                        <motion.span 
+                          animate={{ opacity: [1, 0.5, 1] }} 
+                          transition={{ duration: 1.5, repeat: Infinity }}
+                          className="flex items-center gap-2"
+                        >
+                          <Loader2 size={16} className="animate-spin" /> Dialing...
+                        </motion.span>
                       ) : callStatus === "success" ? (
                         <><PhoneCall size={16} /> Call Again</>
                       ) : (
