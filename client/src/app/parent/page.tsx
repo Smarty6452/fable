@@ -123,7 +123,7 @@ export default function ParentDashboard() {
             <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">Progress Report</h1>
             <p className="text-sm text-slate-400 font-bold flex items-center gap-1.5 justify-end">
               <Volume2 size={14} className="text-primary" />
-              Waggle Analytics
+              Fable Analytics
             </p>
           </div>
         </motion.header>
@@ -435,7 +435,7 @@ export default function ParentDashboard() {
                   <h3 className="text-lg font-black text-slate-800 mb-1">AI Progress Report Call</h3>
                   <p className="text-sm text-slate-500 font-bold mb-4">
                     Our AI buddy will <span className="text-primary font-black">call you</span> with a personalized
-                    progress report about your child's speech therapy practice. Powered by Smallest AI Atoms.
+                    progress report about your child's speech therapy practice. Powered by Smallest AI Fable.
                   </p>
 
                   <div className="flex gap-3 items-center">

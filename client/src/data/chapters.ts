@@ -1,4 +1,4 @@
-// Chapter-based progression system for Waggle
+// Chapter-based progression system for Fable
 export interface Chapter {
   id: string;
   title: string;

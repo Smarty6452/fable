@@ -120,7 +120,7 @@ export default function PlayPage() {
       if (localStorage.getItem("talkybuddy-notifications") === null) {
         addNotification({
           type: "reward",
-          title: "Welcome to Waggle! 🎁",
+          title: "Welcome to Fable! 🎁",
           message: "We're so glad you're here! Start a mission to earn your first XP points!",
         });
       }
