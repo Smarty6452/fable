@@ -123,7 +123,7 @@ export default function HomePage() {
         : `Hi there! I'm Wolfie, your magical speech buddy! I can't wait to hear your beautiful voice. Type your name below so we can start our adventure together!`);
       
       // Use 'amx' for Wolfie (Warm Male Voice) for realism
-      playCachedTTS(message, "amx"); 
+      await playCachedTTS(message, "amx"); 
     } catch (e) {
       console.error("Welcome voice failed", e);
     }
@@ -142,7 +142,7 @@ export default function HomePage() {
 
   const [isShaking, setIsShaking] = useState(false);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!existingUser && !name.trim()) {
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 500);
@@ -151,11 +151,13 @@ export default function HomePage() {
 
     if (!existingUser && name.trim()) {
       localStorage.setItem("kidName", name.trim());
-      // Play a quick confirmation
-      playWelcome(`Great to meet you, ${name}! Let's go!`);
+      // Play a quick confirmation and WAIT for it to finish
+      await playWelcome(`Great to meet you, ${name.trim()}! Let's go!`);
+      
+      // Tiny delay for smoothness after the voice ends
       setTimeout(() => {
         window.location.href = "/play";
-      }, 1500);
+      }, 500);
     } else if (existingUser) {
       window.location.href = "/play";
     }

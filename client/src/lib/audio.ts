@@ -47,6 +47,7 @@ let currentAudio: HTMLAudioElement | null = null;
 
 /**
  * Play a cached or new TTS audio clip.
+ * Returns a promise that resolves when audio finishes playing or fails.
  */
 export const playCachedTTS = async (text: string, voiceId: string = "lauren"): Promise<void> => {
   const url = await preloadTTS(text, voiceId);
@@ -60,10 +61,14 @@ export const playCachedTTS = async (text: string, voiceId: string = "lauren"): P
     const audio = new Audio(url);
     currentAudio = audio;
     
-    // Use a slightly faster rate for better realism in some cases, 
-    // but Smallest AI handles speed in the API call.
-    await audio.play().catch((err) => {
-      console.warn("Audio play failed (maybe user hasn't clicked yet)", err);
+    return new Promise((resolve) => {
+      audio.onended = () => resolve();
+      audio.onerror = () => resolve();
+      
+      audio.play().catch((err) => {
+        console.warn("Audio play failed", err);
+        resolve(); // Resolve anyway to not block logic
+      });
     });
   }
 };
