@@ -266,28 +266,40 @@ export default function ParentDashboard() {
                         Weekly Activity
                       </h2>
                       <div className="flex items-end gap-3 h-40">
-                        {Object.entries(stats.dailyActivity).map(([date, count], i) => {
-                          const height = Math.max(8, (count / maxDaily) * 100);
-                          const dayLabel = new Date(date + "T12:00:00").toLocaleDateString("en", { weekday: "short" });
-                          const isToday = date === new Date().toISOString().split("T")[0];
-                          return (
-                            <div key={date} className="flex-1 flex flex-col items-center gap-1.5">
-                              <span className="text-xs font-black text-primary">{count || ""}</span>
-                              <motion.div
-                                initial={{ height: 0 }}
-                                animate={{ height: `${height}%` }}
-                                transition={{ delay: 0.1 + i * 0.05, duration: 0.6, ease: "easeOut" }}
-                                className={`w-full max-w-[48px] rounded-xl ${
-                                  isToday
-                                    ? "bg-gradient-to-t from-primary to-yellow-400 shadow-md shadow-primary/20"
-                                    : "bg-gradient-to-t from-primary/60 to-orange-300/60"
-                                }`}
-                              />
-                              <span className={`text-[10px] font-bold ${isToday ? "text-primary" : "text-slate-400"}`}>
-                                {dayLabel}
-                              </span>
-                            </div>
-                          );
+                        {Object.entries(stats.dailyActivity)
+                          .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+                          .map(([date, count], i) => {
+                            const height = Math.max(8, (count / maxDaily) * 100);
+                            const dayLabel = new Date(date + "T12:00:00").toLocaleDateString("en", { weekday: "short" });
+                            const isToday = date === new Date().toISOString().split("T")[0];
+                            
+                            return (
+                              <div key={date} className="flex-1 flex flex-col items-center gap-1.5">
+                                <span className={`text-[10px] font-black mb-1 transition-all ${
+                                  count > 0 ? "text-slate-600 scale-100" : "text-transparent scale-0"
+                                }`}>{count}</span>
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: `${height}%`, opacity: 1 }}
+                                  transition={{ delay: 0.1 + i * 0.05, duration: 0.6, ease: "easeOut" }}
+                                  className={`w-full max-w-[48px] rounded-xl relative group ${
+                                    isToday
+                                      ? "bg-gradient-to-t from-[#8B7FDE] to-[#A095E8] shadow-lg shadow-[#8B7FDE]/30"
+                                      : "bg-slate-100 hover:bg-[#8B7FDE]/20 transition-colors"
+                                  }`}
+                                >
+                                  {/* Tooltip for exact count */}
+                                  <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                                    {count} sessions
+                                  </div>
+                                </motion.div>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                                  isToday ? "text-[#8B7FDE]" : "text-slate-300"
+                                }`}>
+                                  {dayLabel}
+                                </span>
+                              </div>
+                            );
                         })}
                       </div>
                     </div>
