@@ -62,7 +62,7 @@ export default function AboutPage() {
           <Link href="/" className="p-3 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border-2 border-white/80 hover:bg-white transition-all hover:scale-105 active:scale-95">
             <ArrowLeft size={24} className="text-primary" />
           </Link>
-          <h1 className="text-4xl font-black text-slate-800">About Waggle</h1>
+          <h1 className="text-4xl font-black text-slate-800">About Fable</h1>
           <div className="w-12" />
         </div>
 
@@ -81,7 +81,7 @@ export default function AboutPage() {
             1 in 12 children have a speech disorder, yet most families can't afford consistent therapy.
           </p>
           <p className="text-lg text-slate-600 leading-relaxed">
-            <span className="font-black text-primary">Waggle</span> makes professional-grade speech practice 
+            <span className="font-black text-primary">Fable</span> makes professional-grade speech practice 
             free, accessible from any browser, and fun through gamification. Every child deserves 
             the chance to communicate clearly.
           </p>

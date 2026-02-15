@@ -19,6 +19,7 @@
     "express": "^5.2.1",
     "express-rate-limit": "^8.2.1",
     "mongoose": "^9.2.1",
+    "smallestai": "^1.0.1",
     "wavefile": "^11.0.0"
   },
   "devDependencies": {

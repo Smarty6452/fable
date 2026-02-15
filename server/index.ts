@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import axios from 'axios';
 import path from 'path';
-import { AtomsClient, Configuration as SmallestConfig } from '@smallest/atoms-sdk';
+import { AtomsClient, Configuration as SmallestConfig } from 'smallestai';
 import { rateLimit } from 'express-rate-limit';
 
 // Robust env loading - try multiple paths for monorepo compatibility
