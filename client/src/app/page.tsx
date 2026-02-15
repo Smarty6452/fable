@@ -405,9 +405,9 @@ export default function HomePage() {
                   >
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       {stat.icon}
-                      <span className="text-xl font-black text-slate-800 tracking-tight group-hover:text-[#8B7FDE] transition-colors">
-            Lumora
-          </span><span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{stat.label}</span></div>
+                      <span className="text-2xl font-black text-slate-800 tracking-tight">{stat.value}</span>
+                    </div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{stat.label}</div>
                   </motion.div>
                 ))}
               </motion.div>
