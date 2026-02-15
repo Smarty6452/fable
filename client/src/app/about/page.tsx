@@ -109,34 +109,47 @@ export default function AboutPage() {
         </motion.div>
 
         {/* Founder */}
+        {/* Founder */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
-          className="bg-white/80 backdrop-blur-xl rounded-[3rem] p-10 border-4 border-white shadow-xl mb-8"
+          className="bg-white/80 backdrop-blur-xl rounded-[3rem] p-10 border-4 border-white shadow-xl mb-8 overflow-hidden relative"
         >
-          <div className="flex items-center gap-3 mb-6">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/10 to-orange-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
+          
+          <div className="flex items-center gap-3 mb-8 relative z-10">
             <Sparkles className="text-yellow-500" size={32} />
-            <h2 className="text-3xl font-black text-slate-800">Meet the Founder</h2>
+            <h2 className="text-3xl font-black text-slate-800">Meet the Maker</h2>
           </div>
 
-          <div className="flex flex-col md:flex-row items-center gap-8">
-            <div className="w-32 h-32 bg-gradient-to-br from-primary to-orange-500 rounded-full flex items-center justify-center text-6xl shadow-xl border-4 border-white">
-              👨‍💻
-            </div>
+          <div className="flex flex-col md:flex-row items-center gap-10 relative z-10">
+            <motion.div 
+              whileHover={{ scale: 1.05, rotate: -2 }}
+              className="w-40 h-40 shrink-0 rounded-full border-4 border-white shadow-2xl overflow-hidden relative bg-slate-100"
+            >
+              {/* Using GitHub Profile Image which is usually high quality */}
+              <img 
+                src="https://github.com/Smarty6452.png" 
+                alt="Rohit Bharti" 
+                className="w-full h-full object-cover"
+              />
+            </motion.div>
+            
             <div className="flex-1 text-center md:text-left">
-              <h3 className="text-2xl font-black text-slate-800 mb-2">Rohit Bharti</h3>
-              <p className="text-lg font-bold text-primary mb-3">Full-Stack Developer | AI Enthusiast</p>
-              <p className="text-slate-600 leading-relaxed mb-4">
-                <span className="font-black">3+ years</span> building scalable web applications with React, Next.js, Node.js, and ASP.NET. 
-                Currently a <span className="font-black">Student Mentor at GDSC Conestoga</span>, leading technical workshops and 
-                building AI-integrated platforms. Passionate about making education accessible through technology.
+              <h3 className="text-3xl font-black text-slate-800 mb-2">Rohit Bharti</h3>
+              <p className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-primary to-orange-500 mb-4">
+                Full-Stack Developer | AI Innovation
               </p>
+              <p className="text-slate-600 leading-relaxed mb-6 font-medium">
+                "I believe technology finds its true purpose when it helps people. I built <span className="font-black text-slate-800">Fable</span> to show how AI can allow every child to be heard, understood, and celebrated."
+              </p>
+              
               <div className="flex flex-wrap gap-3 justify-center md:justify-start">
-                <SocialLink href="https://linkedin.com/in/rohit-bharti-" icon={<Linkedin size={18} />} label="LinkedIn" />
-                <SocialLink href="https://github.com/smarty-6452" icon={<Github size={18} />} label="GitHub" />
-                <SocialLink href="https://rohitmansinghbharti.com" icon={<Globe size={18} />} label="Portfolio" />
-                <SocialLink href="mailto:rohit@example.com" icon={<Mail size={18} />} label="Email" />
+                <SocialLink href="https://www.linkedin.com/in/rohit-bharti-/" icon={<Linkedin size={18} />} label="LinkedIn" />
+                <SocialLink href="https://github.com/Smarty6452" icon={<Github size={18} />} label="GitHub" />
+                <SocialLink href="https://rohitportfoliodev.vercel.app/" icon={<Globe size={18} />} label="Portfolio" />
+                <SocialLink href="mailto:rohitbharti326452@gmail.com" icon={<Mail size={18} />} label="Email" />
               </div>
             </div>
           </div>
