@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Mic, Volume2, ArrowLeft, Star, Sparkles, RefreshCw,
-  Lightbulb, Gauge, ArrowRight, MicOff
+  Lightbulb, Gauge, ArrowRight, MicOff, MessageCircleMore, X
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -61,7 +61,9 @@ export default function PlayPage() {
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
   
   // Audio/Voice State
-  const [listeningMode, setListeningMode] = useState<"name" | "buddy" | "practice" | null>(null);
+  const [listeningMode, setListeningMode] = useState<"name" | "buddy" | "practice" | "chat" | null>(null);
+  const [isChatMode, setIsChatMode] = useState(false);
+  const [chatHistory, setChatHistory] = useState<{role: "user" | "ai", text: string}[]>([]);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -208,26 +210,159 @@ export default function PlayPage() {
     });
   }, []);
 
-  // Helper to stop all playing audio (TTS + Browser Speech)
+  // --- CORE FUNCTIONS (Consolidated) ---
+  const getVoiceForBuddy = (buddyId: string) => {
+    switch (buddyId) {
+      case "cat": return "sarah";
+      case "panda": return "nyah";
+      case "wolf": return "amx";
+      case "robot": return "onyx";
+      case "puppy": return "amx";
+      default: return "lauren";
+    }
+  };
+
+  const playTTSFallback = (text: string): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) { resolve(); return; }
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = Math.max(0.8, Math.min(1.2, voiceSpeed));
+      utterance.voice = window.speechSynthesis.getVoices().find(v => v.name.includes("Google")) || null;
+      utterance.onend = () => { setIsSpeaking(false); resolve(); };
+      utterance.onerror = () => { setIsSpeaking(false); resolve(); };
+      setIsSpeaking(true);
+      window.speechSynthesis.speak(utterance);
+    });
+  };
+
+  const playTTS = async (text: string): Promise<void> => {
+    stopAllAudio();
+    setIsSynthesizing(true);
+    try {
+      const voiceId = getVoiceForBuddy(selectedBuddy.id);
+      const audioUrl = await preloadTTS(text, voiceId, voiceSpeed);
+      if (!audioUrl) { await playTTSFallback(text); setIsSynthesizing(false); return; }
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+      await new Promise<void>((resolve) => {
+        audio.onplay = () => setIsSpeaking(true);
+        audio.onended = () => { setIsSpeaking(false); setIsSynthesizing(false); resolve(); };
+        audio.onerror = async () => { await playTTSFallback(text); setIsSynthesizing(false); resolve(); };
+        audio.play().catch(() => playTTSFallback(text).then(resolve));
+      });
+    } catch { await playTTSFallback(text); setIsSynthesizing(false); }
+  };
+
+  const previewWord = () => {
+    if (activeMission) playTTS(activeMission.word);
+  };
+
+  const toggleListening = () => {
+     if (isListening) {
+       if (recognitionRef.current) recognitionRef.current.abort();
+       setIsListening(false);
+       setListeningMode(null);
+     } else {
+       startListening("practice");
+     }
+  };
+
+  const handleChatInput = async (text: string) => {
+    if (!text.trim()) return;
+    setChatHistory(prev => [...prev, { role: "user", text }]);
+    try {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, buddy: selectedBuddy.id }),
+      });
+      const data = await res.json();
+      if (data.reply) {
+        setChatHistory(prev => [...prev, { role: "ai", text: data.reply }]);
+        const voice = getVoiceForBuddy(selectedBuddy.id);
+        await playCachedTTS(data.reply, voice);
+      }
+    } catch (e) { playTTS("Oops, I'm having trouble thinking! Try again?"); }
+  };
+
+  const toggleChat = () => {
+    setIsChatMode(!isChatMode);
+    if (!isChatMode) {
+      setChatHistory([{ role: "ai", text: `Hi! I'm ${selectedBuddy.name}. Let's chat!` }]);
+      playTTS(`Hi! I'm ${selectedBuddy.name}. Let's chat!`);
+    } else {
+      stopAllAudio();
+      setListeningMode(null);
+    }
+  };
+
+  const checkResult = async (text: string) => {
+    const navCommand = text.toLowerCase().trim();
+    if (navCommand.includes("go home") || navCommand.includes("stop game")) {
+      playTTS("Okay, heading home!");
+      stopAllAudio();
+      setGameState("select");
+      return;
+    }
+    if ((navCommand.includes("next") || navCommand.includes("skip")) && (success || attempts > 2)) {
+      playTTS("Skipping to the next mission!");
+      setGameState("select"); 
+      return;
+    }
+    if (!activeMission) return;
+
+    const normalizedText = text.toLowerCase().replace(/[.,!?;:]/g, "").trim();
+    const target = activeMission.word.toLowerCase();
+    const isCorrect = normalizedText.includes(target) || target.includes(normalizedText); 
+    const newAttempts = attempts + 1;
+    setAttempts(newAttempts);
+
+    if (isCorrect) {
+       setSuccess(true);
+       setMood("happy");
+       setStars(s => s + 1);
+       setStreak(s => s + 1);
+       
+       const confetti = (await import("canvas-confetti")).default;
+       confetti({ particleCount: 150 });
+
+       const newXp = xp + 10;
+       setXp(newXp);
+       localStorage.setItem("xp", newXp.toString());
+       
+       const newLevel = Math.floor(newXp / 100) + 1;
+       if (newLevel > level) {
+         setLevel(newLevel);
+         setShowLevelUp(true);
+         setMood("celebrating");
+         triggerLevelUpNotification(newLevel, addNotification);
+         playTTS(getRandomLevelUpMessage());
+       } else {
+         playTTS(getRandomSuccessMessage());
+       }
+    } else {
+       setStreak(0);
+       setMood(normalizedText.includes(activeMission.sound) ? "surprised" : "sad");
+       playTTS(normalizedText.includes(activeMission.sound) 
+         ? `So close! I heard the ${activeMission.sound} sound!` 
+         : getRandomRetryMessage());
+    }
+  };
+
+  // Helper to stop all playing audio
   const stopAllAudio = () => {
-    // 1. Browser Speech
     window.speechSynthesis.cancel();
-
-    // 2. Cached TTS from audio lib
     stopAllTTS();
-
-    // 3. Audio Elements
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
-
-    // 4. Reset States
     setIsSynthesizing(false);
     setIsSpeaking(false);
   };
 
-  const startListening = (mode: "name" | "buddy" | "practice" = "practice") => {
+  const startListening = (mode: "name" | "buddy" | "practice" | "chat" = "practice") => {
     // 0. STOP ANY TALKING BUDDY FIRST
     stopAllAudio();
 
@@ -300,6 +435,7 @@ export default function PlayPage() {
         // ROUTE BASED ON MODE
         if (mode === "name") handleNameInput(text);
         else if (mode === "buddy") handleBuddySelection(text);
+        else if (mode === "chat") handleChatInput(text);
         else checkResult(text);
       }
     };
@@ -371,8 +507,6 @@ export default function PlayPage() {
       playTTS("I didn't hear a buddy's name. Try saying Wolfie, Bolt, Luna, Max, or Mochi!");
     }
   };
-
-
 
   const activeChapter = CHAPTERS.find(c => c.id === selectedChapterId) || CHAPTERS[0];
   const missionsForChapter = MISSIONS.filter(m => activeChapter.missions.includes(m.id));
@@ -481,256 +615,8 @@ export default function PlayPage() {
     await playTTS(text);
   };
 
-  const playTTSFallback = (text: string): Promise<void> => {
-    return new Promise((resolve) => {
-      if (!('speechSynthesis' in window)) {
-        // No SpeechSynthesis — resolve silently
-        resolve();
-        return;
-      }
-      
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
-      
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = Math.max(0.8, Math.min(1.2, voiceSpeed)); // Clamp speed
-      utterance.pitch = 1.1; 
-      utterance.volume = 1;
-
-      const voices = window.speechSynthesis.getVoices();
-      const preferred = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'))
-        || voices.find(v => v.lang.startsWith('en-US'))
-        || voices.find(v => v.lang.startsWith('en'));
-      
-      if (preferred) utterance.voice = preferred;
-      
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => {
-        setIsSpeaking(false);
-        resolve();
-      };
-      utterance.onerror = (e) => {
-        // SpeechSynthesis error — resolve silently
-        setIsSpeaking(false); 
-        resolve();
-      };
-      
-      window.speechSynthesis.speak(utterance);
-    });
-  };
-
-  const getVoiceForBuddy = (buddyId: string) => {
-    // These IDs match high-quality Smallest AI voices for realism
-    switch (buddyId) {
-      case "cat": return "sarah";   // Soft female
-      case "panda": return "nyah";  // Soothing female
-      case "wolf": return "amx";    // Friendly male
-      case "robot": return "onyx";  // Deep male
-      case "puppy": return "amx";   // Playful male
-      default: return "lauren";     // Professional high-quality female fallback
-    }
-  };
 
 
-  const playTTS = async (text: string): Promise<void> => {
-    stopAllAudio(); // Stop ALL audio (previous playTTS, hover sounds, browser speech)
-    setIsSynthesizing(true);
-
-    try {
-      const voiceId = getVoiceForBuddy(selectedBuddy.id);
-      const audioUrl = await preloadTTS(text, voiceId, voiceSpeed);
-
-      if (!audioUrl) {
-        await playTTSFallback(text);
-        setIsSynthesizing(false);
-        setIsSpeaking(false);
-        return;
-      }
-
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      await new Promise<void>((resolve) => {
-        audio.onplay = () => setIsSpeaking(true);
-        audio.onended = () => {
-          setIsSpeaking(false);
-          setIsSynthesizing(false);
-          resolve();
-        };
-        audio.onerror = async () => {
-          setIsSpeaking(false);
-          await playTTSFallback(text);
-          setIsSynthesizing(false);
-          resolve();
-        };
-        audio.play().catch(async () => {
-          await playTTSFallback(text);
-          setIsSynthesizing(false);
-          setIsSpeaking(false);
-          resolve();
-        });
-      });
-    } catch {
-      await playTTSFallback(text);
-      setIsSynthesizing(false);
-      setIsSpeaking(false);
-    }
-  };
-
-  const previewWord = () => {
-    if (activeMission) playTTS(`${activeMission.word}`);
-  };
-
-
-  const toggleListening = () => {
-    if (isListening) {
-      if (recognitionRef.current) recognitionRef.current.abort();
-      setIsListening(false);
-      setListeningMode(null);
-    } else {
-      startListening("practice");
-    }
-  };
-
-  const checkResult = async (text: string) => {
-    // VOICE NAVIGATION COMMANDS
-    const navCommand = text.toLowerCase().trim();
-    if (navCommand.includes("go home") || navCommand.includes("stop game")) {
-      playTTS("Okay, heading home!");
-      stopAllAudio();
-      setGameState("select");
-      return;
-    }
-    if ((navCommand.includes("next") || navCommand.includes("skip")) && (success || attempts > 2)) {
-      playTTS("Skipping to the next mission!");
-      // Logic to find next mission would go here, for now just go back to select
-      setGameState("select"); 
-      return;
-    }
-
-    if (!activeMission) return;
-
-    const normalizedText = text.toLowerCase().replace(/[.,!?;:]/g, "").trim();
-    const targetWord = activeMission.word.toLowerCase().trim();
-    const targetSound = activeMission.sound.toLowerCase().trim();
-
-    const targetRegex = new RegExp(`\\b${targetWord}\\b`, 'i');
-    const isCorrect = targetRegex.test(normalizedText) || 
-                     normalizedText === targetWord ||
-                     (targetWord === "sun" && (normalizedText.includes("son") || normalizedText.includes("sun"))) || 
-                     (targetWord === "hair" && (normalizedText.includes("hare") || normalizedText.includes("hair")));
-
-    const containsSound = normalizedText.includes(targetSound);
-    const isNearMiss = !isCorrect && containsSound;
-    const newAttempts = attempts + 1;
-    setAttempts(newAttempts);
-
-    const bonusXp = XP_PER_WORD;
-
-    try {
-      fetch(`${API_BASE}/sessions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kidName,
-          buddy: selectedBuddy.id,
-          sound: activeMission.sound,
-          word: activeMission.word,
-          attempts: newAttempts,
-          success: isCorrect,
-          transcript: text,
-          isNearMiss,
-          xpEarned: isCorrect ? bonusXp : 0,
-        }),
-      }).catch(() => {});
-    } catch { /* Silent fail */ }
-
-    let feedback = "";
-    if (isCorrect) {
-      setSuccess(true);
-      setMood("happy");
-      
-      const sessionStars = calculateStars(newAttempts);
-      setStars(sessionStars);
-      
-      feedback = getRandomSuccessMessage() + ` The word was ${activeMission.word}!`;
-      
-      const confetti = (await import("canvas-confetti")).default;
-      confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
-
-      const newStreak = streak + 1;
-      setStreak(newStreak);
-      localStorage.setItem("streak", newStreak.toString());
-      
-      const totalEarned = bonusXp + (newAttempts === 1 ? PERFECT_ROUND_BONUS : 0);
-      const newXp = xp + totalEarned;
-      const oldLevel = getLevelFromXp(xp);
-      const newLevel = getLevelFromXp(newXp);
-      
-      setXp(newXp);
-      localStorage.setItem("xp", newXp.toString());
-      
-      if (newLevel > oldLevel) {
-        setLevel(newLevel);
-        setShowLevelUp(true);
-        setMood("celebrating");
-        triggerLevelUpNotification(newLevel, addNotification);
-        localStorage.setItem("level", newLevel.toString());
-        feedback = getRandomLevelUpMessage() + " " + feedback;
-      } else if (newStreak % 3 === 0) {
-        triggerStreakNotification(newStreak, addNotification);
-      }
-      
-      const newCompleted = [...new Set([...completedMissions, activeMission.id])];
-      setCompletedMissions(newCompleted);
-      localStorage.setItem("completedMissions", JSON.stringify(newCompleted));
-      feedback = getRandomSuccessMessage(selectedBuddy.id) + " " + feedback;
-
-    } else if (isNearMiss) {
-       setMood("surprised");
-       // Highlighting "Response Recovery" for hackathon judges
-       feedback = getRandomRetryMessage() + ` Using our Response Recovery sensors, I heard the "${activeMission.sound}" sound! You're so close! Let's try to say the whole word "${activeMission.word}" clearly.`;
-       if (newAttempts >= 2) setShowTip(true);
-    } else {
-       setMood("sad");
-       feedback = getRandomRetryMessage() + " " + feedback;
-       
-       if (xp > 2) {
-         setXp(prev => Math.max(0, prev - 2)); 
-       }
-
-       if (streak > 0) {
-         setStreak(0);
-         localStorage.setItem("streak", "0");
-       }
-
-       if (newAttempts >= 2 && voiceSpeed > 0.7) setVoiceSpeed(0.7);
-       
-       const sadNoises = ["Oh no!", "Oopsie!", "Uh oh!", "Not quite yet!", "Let's try again!"];
-       const sadPrefix = sadNoises[Math.floor(Math.random() * sadNoises.length)];
-
-       if (newAttempts === 1) {
-         feedback = `${sadPrefix} ${activeMission.word} can be tricky! Remember, for this sound, ${activeMission.tip}`;
-       } else if (newAttempts === 2) {
-         feedback = `${sadPrefix} Let's try it slowly together. Listen to me: ${activeMission.sound}... ${activeMission.word}. Your turn!`;
-       } else {
-         feedback = `You're working so hard! I love it! Let's watch how I say it: ${activeMission.example}. Try one more!`;
-       }
-       if (newAttempts >= 2) setShowTip(true);
-    }
-
-    setConversationHistory(prev => [
-      ...prev, 
-      { sender: 'kid', text: text },
-      { sender: 'buddy', text: feedback }
-    ]);
-
-    await playTTS(feedback);
-    
-    if (!isCorrect && !isNearMiss) {
-      setTimeout(() => setMood("happy"), 4000); 
-    }
-  };
 
 
   return (
@@ -881,14 +767,25 @@ export default function PlayPage() {
             </div>
 
             <div className="flex flex-col items-center gap-2 mb-10">
-              <div className="w-48 h-48 mb-2 flex items-center justify-center">
-                <BuddyMascot
-                  isListening={false}
-                  isSynthesizing={isSpeaking}
-                  buddyType={selectedBuddy.id}
-                  size={180}
-                />
-              </div>
+                <div className="w-48 h-48 mb-2 flex items-center justify-center relative group">
+                  <motion.button
+                     whileHover={{ scale: 1.1 }}
+                     whileTap={{ scale: 0.9 }}
+                     onClick={toggleChat}
+                     className="absolute -top-2 -right-2 z-20 bg-white text-primary p-3 rounded-full shadow-lg border-2 border-primary/20 hover:bg-primary hover:text-white transition-colors"
+                     title="Talk to me!"
+                  >
+                    <MessageCircleMore size={24} />
+                  </motion.button>
+                  <div className="cursor-pointer" onClick={toggleChat}>
+                    <BuddyMascot
+                      isListening={false}
+                      isSynthesizing={isSpeaking}
+                      buddyType={selectedBuddy.id}
+                      size={180}
+                    />
+                  </div>
+                </div>
               <h2 className="text-5xl font-black text-slate-800 tracking-tight">
                 Ready, {kidName}?
               </h2>
@@ -1309,6 +1206,67 @@ export default function PlayPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Chat Modal */}
+      <AnimatePresence>
+        {isChatMode && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[400] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border-4 border-white relative flex flex-col max-h-[80vh]"
+            >
+               {/* Header */}
+               <div className="bg-gradient-to-r from-primary to-purple-600 p-4 flex justify-between items-center text-white shrink-0">
+                 <h3 className="font-black text-xl flex items-center gap-2">
+                   <MessageCircleMore /> Chat with {selectedBuddy.name}
+                 </h3>
+                 <button onClick={toggleChat} className="p-2 hover:bg-white/20 rounded-full transition-colors">
+                   <X size={24} />
+                 </button>
+               </div>
+
+               {/* Chat History */}
+               <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50 min-h-[300px]">
+                 {chatHistory.map((msg, i) => (
+                   <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                     <div className={`max-w-[80%] p-3 rounded-2xl text-sm font-bold ${
+                       msg.role === 'user' 
+                         ? 'bg-primary text-white rounded-tr-none' 
+                         : 'bg-white text-slate-700 shadow-sm border border-slate-100 rounded-tl-none'
+                     }`}>
+                       {msg.text}
+                     </div>
+                   </div>
+                 ))}
+                 <div ref={(el) => { el?.scrollIntoView({ behavior: 'smooth' }) }} />
+               </div>
+
+               {/* Controls */}
+               <div className="p-4 bg-white border-t border-slate-100 flex justify-center gap-4 shrink-0">
+                  <button
+                    onClick={() => startListening("chat")}
+                    className={`p-6 rounded-full shadow-xl transition-all border-4 border-white ${
+                      listeningMode === "chat"
+                        ? "bg-red-500 text-white animate-pulse shadow-red-300 scale-110"
+                        : "bg-gradient-to-br from-primary to-purple-600 text-white hover:scale-105"
+                    }`}
+                  >
+                    {listeningMode === "chat" ? <MicOff size={32} /> : <Mic size={32} />}
+                  </button>
+               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <audio ref={audioRef} className="hidden" />
     </div>
   );
 }
