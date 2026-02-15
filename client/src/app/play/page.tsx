@@ -262,7 +262,6 @@ export default function PlayPage() {
       case "puppy": intro = "Woof woof! I'm Max! Let's play catch with some words!"; break;
       case "panda": intro = "Hello friend. I'm Mochi. Let's take our time and learn."; break;
     }
-    }
     
     playTTS(intro, voiceId);
   };
