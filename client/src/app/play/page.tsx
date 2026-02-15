@@ -43,7 +43,7 @@ export default function PlayPage() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification } = useNotifications();
 
   // Core Game State
-  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "success">("select");
+  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice" | "success">("onboarding");
   const [selectedBuddy, setSelectedBuddy] = useState(BUDDIES[0]);
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
   
@@ -301,10 +301,6 @@ export default function PlayPage() {
 
       navigator.mediaDevices.getUserMedia({ audio: true }).then(newStream => {
         setStream(newStream);
-        
-        // Parallel Media Recorder for visualizer (keep simply for legacy or remove later)
-        // ... (removed old recorder/analyser logic to rely on MicVisualizer component) ...
-        
       }).catch(err => {
           console.warn("Mic stream failed", err);
       });
@@ -362,15 +358,15 @@ export default function PlayPage() {
     }
   };
 
+
   const logout = () => {
-    localStorage.removeItem("kidName");
-    localStorage.removeItem("selectedBuddy");
-    localStorage.removeItem("xp");
-    localStorage.removeItem("level");
-    localStorage.removeItem("streak");
-    localStorage.removeItem("completedMissions");
-    localStorage.removeItem("talkybuddy-notifications");
-    window.location.reload();
+    if (window.confirm("Switch explorer name? Your current progress will be safe for that name!")) {
+      localStorage.removeItem("kidName");
+      localStorage.removeItem("selectedBuddy");
+      // Keep other stats in localstorage, they are keyed by name if we were to support multiple
+      // But for now, just clear the name to force re-onboarding
+      window.location.href = "/";
+    }
   };
 
 
@@ -458,12 +454,12 @@ export default function PlayPage() {
       }
     }
     switch (buddyId) {
-      case "cat": return "emily";   
-      case "panda": return "sarah"; 
-      case "wolf": return "nyah";  
+      case "cat": return "sarah";   
+      case "panda": return "nyah"; 
+      case "wolf": return "lauren";  
       case "robot": return "onyx"; 
       case "puppy": return "amx";
-      default: return "emily";
+      default: return "lauren";
     }
   };
 
@@ -752,47 +748,15 @@ export default function PlayPage() {
                     <p className="text-sm font-black text-slate-400 leading-none">{xpInfo.current}/{xpInfo.required} XP</p>
                   </div>
                 )}
-                <button 
+                {/* Switch User Button */}
+                <button
                   onClick={logout}
-                  className="p-4 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border-2 border-white/80 hover:bg-red-50 hover:border-red-200 transition-colors group"
+                  className="px-4 py-3 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border-2 border-white/80 hover:bg-red-50 hover:border-red-200 transition-all flex items-center gap-2 group"
                   title="Switch User"
                   suppressHydrationWarning
                 >
-                  <RefreshCw size={24} className="text-slate-700 group-hover:rotate-180 transition-transform duration-500" />
-                </button>
-                <NotificationBell 
-                  notifications={notifications}
-                  unreadCount={unreadCount}
-                  onMarkAsRead={markAsRead}
-                  onMarkAllAsRead={markAllAsRead}
-                  onClearAll={clearAll}
-                />
-                
-                {/* Reset Progress Button */}
-                <button
-                  onClick={() => {
-                    if (window.confirm("Are you sure you want to delete all progress for this name? This cannot be undone!")) {
-                       localStorage.clear();
-                       // Also potentially wipe server data via API? For now, focused on client reset + clean slate visual.
-                       // Just refreshing allows restart.
-                       // Ideally, we'd delete server sessions, but simple 'logout' is safer for hackathon unless requested.
-                       // Wait, user asked for 'create user with same name' handling.
-                       // So maybe just logging out is enough, but to truly 'reset', we should clear local state.
-                       setXp(0);
-                       setLevel(1);
-                       setStreak(0);
-                       setCompletedMissions([]);
-                       localStorage.removeItem("xp");
-                       localStorage.removeItem("level");
-                       localStorage.removeItem("streak");
-                       localStorage.removeItem("completedMissions");
-                       toast.success("Progress reset! Starting fresh.");
-                    }
-                  }}
-                  className="p-3 bg-white/80 backdrop-blur-md rounded-2xl shadow-lg border-2 border-white/80 hover:bg-red-50 hover:border-red-200 transition-colors group"
-                  title="Reset Progress"
-                >
-                  <RefreshCw size={20} className="text-slate-400 group-hover:text-red-500 transition-colors" />
+                  <RefreshCw size={18} className="text-slate-400 group-hover:text-red-500 group-hover:rotate-180 transition-all duration-500" />
+                  <span className="text-xs font-black text-slate-500 group-hover:text-red-500">Switch User</span>
                 </button>
               </div>
             </div>
@@ -856,7 +820,11 @@ export default function PlayPage() {
                     whileHover={{ scale: 1.05, y: -5 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => startPractice(mission)}
-                    onMouseEnter={() => playCachedTTS(mission.word, getVoiceForBuddy(selectedBuddy.id))}
+                    onMouseEnter={() => {
+                        const voice = getVoiceForBuddy(selectedBuddy.id);
+                        // Force lowercase for better TTS matching if needed, though most APIs handle title case
+                        playCachedTTS(mission.word, voice);
+                    }}
                     className="relative bg-white/80 backdrop-blur-xl p-8 rounded-[3rem] border-4 border-white shadow-xl hover:shadow-2xl transition-all group"
                     suppressHydrationWarning
                   >

@@ -97,17 +97,32 @@ export default function HomePage() {
     return () => clearTimeout(t);
   }, []);
 
-  const playWelcome = async () => {
+  const [name, setName] = useState("");
+
+  const playWelcome = async (forceMessage?: string) => {
     try {
       const { playCachedTTS } = await import("@/lib/audio");
-      const name = localStorage.getItem("kidName");
-      const message = name 
-        ? `Welcome back, ${name}! Your buddy Wolfie is so happy to see you again! Click the button to continue our adventure!`
-        : "Hi there! Welcome to Fable! I'm Wolfie, your new speech therapy buddy! I'm so excited to help you learn and play! Click the start button below to begin our journey together!";
+      const currentName = localStorage.getItem("kidName") || name;
+      const message = forceMessage || (currentName 
+        ? `Welcome back, ${currentName}! Your buddy Wolfie is so happy to see you again! Click the button to continue our adventure!`
+        : "Hi there! Welcome to Fable! I'm Wolfie, your new speech therapy buddy! I'm so excited to help you learn and play! Type your name below so we can start!");
       
       playCachedTTS(message, "C"); // Using voice 'C' (Wolfie/Male)
     } catch (e) {
       console.error("Welcome voice failed", e);
+    }
+  };
+
+  const handleStart = () => {
+    if (!existingUser && name.trim()) {
+      localStorage.setItem("kidName", name.trim());
+      // Play a quick confirmation
+      playWelcome(`Great to meet you, ${name}! Let's go!`);
+      setTimeout(() => {
+        window.location.href = "/play";
+      }, 1500);
+    } else if (existingUser) {
+      window.location.href = "/play";
     }
   };
 
@@ -275,13 +290,41 @@ export default function HomePage() {
                 for every child.
               </motion.p>
 
-              {/* CTA Buttons */}
-              <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center gap-4 mb-14">
-                <Link href="/play" data-tour="start-button">
+              {/* CTA & Name Input */}
+              <motion.div variants={fadeUp} className="flex flex-col items-center gap-6 mb-14 w-full max-w-md mx-auto">
+                {!existingUser ? (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full"
+                  >
+                    <div className="relative group">
+                      <input
+                        type="text"
+                        placeholder="Enter your name..."
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && name.trim() && handleStart()}
+                        className="w-full px-8 py-6 bg-white/80 backdrop-blur-xl rounded-[2rem] border-4 border-white focus:border-[#8B7FDE] outline-none text-2xl font-black text-slate-800 shadow-xl transition-all placeholder:text-slate-300 text-center"
+                      />
+                      <motion.div 
+                        animate={name.trim() ? { scale: [1, 1.05, 1] } : {}}
+                        transition={{ repeat: Infinity, duration: 2 }}
+                        className="absolute -right-2 -top-2 bg-primary text-white p-2 rounded-full shadow-lg border-2 border-white scale-0 group-focus-within:scale-100 transition-transform"
+                      >
+                        <Heart size={16} fill="white" />
+                      </motion.div>
+                    </div>
+                  </motion.div>
+                ) : null}
+
+                <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
                   <MagneticButton
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
-                    className="group relative px-10 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-xl shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer"
+                    onClick={handleStart}
+                    disabled={!existingUser && !name.trim()}
+                    className="group relative px-10 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-xl shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <motion.div
                       className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
@@ -294,25 +337,25 @@ export default function HomePage() {
                       <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                     </span>
                   </MagneticButton>
-                </Link>
 
-                <Link href="/parent" data-tour="parent-portal">
-                  <MagneticButton
-                    whileHover={{ scale: 1.03 }}
-                    whileTap={{ scale: 0.97 }}
-                    className="px-8 py-5 bg-white/80 backdrop-blur-xl rounded-[2rem] text-slate-700 font-black text-lg shadow-lg hover:shadow-xl border-4 border-white/80 transition-all flex items-center gap-3 cursor-pointer"
-                  >
-                    <BarChart3 size={20} />
-                    Parent Portal
-                  </MagneticButton>
-                </Link>
+                  <Link href="/parent" data-tour="parent-portal">
+                    <MagneticButton
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      className="px-8 py-5 bg-white/80 backdrop-blur-xl rounded-[2rem] text-slate-700 font-black text-lg shadow-lg hover:shadow-xl border-4 border-white/80 transition-all flex items-center gap-3 cursor-pointer"
+                    >
+                      <BarChart3 size={20} />
+                      Parent Portal
+                    </MagneticButton>
+                  </Link>
+                </div>
 
                 {existingUser && (
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={resetUser}
-                    className="flex items-center gap-2 text-slate-400 font-bold text-sm hover:text-red-400 transition-colors py-2 px-3"
+                    className="flex items-center gap-2 text-slate-400 font-bold text-sm hover:text-red-400 transition-colors py-2 px-3 bg-white/40 backdrop-blur-sm rounded-full border border-white/60"
                   >
                     <RefreshCw size={16} />
                     Switch User
