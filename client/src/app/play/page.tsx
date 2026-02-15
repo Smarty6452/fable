@@ -1006,6 +1006,16 @@ export default function PlayPage() {
             )}
 
             <AnimatePresence>
+              <motion.div
+                animate={{
+                   scale: isListening ? [1, 1.1, 1] : 1,
+                   opacity: isListening ? 1 : 0.5
+                }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                className={`w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg transition-colors ${isListening ? "bg-red-500 text-white" : "bg-slate-200 text-slate-400"}`}
+              >
+                <Mic size={24} />
+              </motion.div>
               {success && (
                 <motion.div
                   initial={{ opacity: 0 }}
