@@ -119,7 +119,7 @@ export default function GuidedTour({ steps, onComplete, storageKey }: GuidedTour
             animate={{ 
               opacity: 1, 
               scale: 1,
-              boxShadow: "0 0 0 9999px rgba(0,0,0,0.75)" 
+              boxShadow: "0 0 0 9999px rgba(0,0,0,0.85)" 
             }}
             exit={{ opacity: 0, scale: 1.05 }}
             className="fixed z-50 pointer-events-none"
@@ -212,7 +212,7 @@ export default function GuidedTour({ steps, onComplete, storageKey }: GuidedTour
 export const HOME_TOUR_STEPS: TourStep[] = [
   {
     target: "[data-tour='start-button']",
-    title: "Welcome to Waggle! 🎉",
+    title: "Welcome to Fable! 🎉",
     content: "Click here to begin your speech adventure with Wolfie! We'll practice sounds together.",
     position: "bottom",
   },
