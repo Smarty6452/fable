@@ -231,18 +231,24 @@ export default function PlayPage() {
   const playTTSFallback = (text: string): Promise<void> => {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) {
+        console.error("No SpeechSynthesis supported");
         resolve();
         return;
       }
+      
+      // Cancel any ongoing speech
       window.speechSynthesis.cancel();
+      
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = voiceSpeed;
-      utterance.pitch = 1.1;
+      utterance.rate = Math.max(0.8, Math.min(1.2, voiceSpeed)); // Clamp speed
+      utterance.pitch = 1.1; 
       utterance.volume = 1;
+
       const voices = window.speechSynthesis.getVoices();
       const preferred = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'))
         || voices.find(v => v.lang.startsWith('en-US'))
         || voices.find(v => v.lang.startsWith('en'));
+      
       if (preferred) utterance.voice = preferred;
       
       utterance.onstart = () => setIsSpeaking(true);
@@ -250,10 +256,12 @@ export default function PlayPage() {
         setIsSpeaking(false);
         resolve();
       };
-      utterance.onerror = () => {
+      utterance.onerror = (e) => {
+        console.error("SpeechSynthesis Error:", e);
         setIsSpeaking(false); 
         resolve();
       };
+      
       window.speechSynthesis.speak(utterance);
     });
   };
@@ -387,22 +395,23 @@ export default function PlayPage() {
     recognition.interimResults = true;
     recognition.lang = "en-US";
 
+    recognition.maxAlternatives = 3;
+
     recognition.onstart = () => {
        setIsListening(true);
+       setSpeechError(null);
     };
 
     recognition.onresult = (event: any) => {
       const results = Array.from(event.results);
-      const text = results
-        .map((result: any) => result[0])
-        .map((result: any) => result.transcript)
-        .join("");
+      const transcriptItem = results[0] as any;
+      const text = transcriptItem[0].transcript;
       
       setTranscript(text);
       
-      // Only check result if it's final
-      if ((results[0] as any).isFinal) {
-        setIsListening(false); // Stop listening after result
+      // Check if final
+      if (transcriptItem.isFinal) {
+        setIsListening(false);
         checkResult(text);
       }
     };
@@ -416,17 +425,20 @@ export default function PlayPage() {
       setIsListening(false);
       
       if (event.error === 'no-speech') {
-        // Reduced strictness for demo
-        setSpeechError("🎤 Tap the mic to try again!");
+        setSpeechError("🎤 I didn't hear anything. Try moving closer?");
+        toast("Microphone seems quiet. Try speaking louder! 📢");
       } else if (event.error === 'not-allowed') {
         setSpeechError("🔒 Please allow microphone access.");
-        toast.error("Please allow microphone access in your browser settings.");
+        toast.error("Please allow microphone access in your browser settings. 🔒");
+      } else if (event.error === 'network') {
+        setSpeechError("⚠️ Network error. Check your connection.");
       } else {
-        setSpeechError("⚠️ Connection error. Try again.");
+        setSpeechError("⚠️ Oops, something went wrong. Tap to try again.");
       }
     };
 
     recognition.onend = () => {
+      // If we stopped listening but didn't get a result and no error, maybe it just timed out?
       setIsListening(false);
       recognitionRef.current = null;
       if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
@@ -474,15 +486,16 @@ export default function PlayPage() {
     
     console.log(`🎙️ Hearing: "${normalizedText}" | Target: "${targetWord}"`);
 
-    // Improved matching logic
-    const isCorrect = normalizedText.includes(targetWord) || 
-                     (targetWord === "cake" && (normalizedText.includes("kake") || normalizedText.includes("take"))) ||
-                     (targetWord === "sun" && normalizedText.includes("son")) ||
-                     normalizedText === targetWord;
+    // Flexible matching using regex for whole word or significant partials
+    const targetRegex = new RegExp(`\\b${targetWord}\\b`, 'i');
     
-    const containsSound = normalizedText.includes(targetSound) || 
-                         (targetSound === "c" && normalizedText.includes("k")) ||
-                         (targetSound === "s" && normalizedText.includes("ss"));
+    const isCorrect = targetRegex.test(normalizedText) || 
+                     normalizedText === targetWord ||
+                     (targetWord === "sun" && normalizedText.includes("son")) || // Common homophones
+                     (targetWord === "hair" && normalizedText.includes("hare"));
+
+    // Check for target sound if word missed
+    const containsSound = normalizedText.includes(targetSound);
     
     const isNearMiss = !isCorrect && containsSound;
     const newAttempts = attempts + 1;
@@ -515,7 +528,7 @@ export default function PlayPage() {
     if (isCorrect) {
       setSuccess(true);
       setMood("happy"); // Happy buddy!
-      feedback = `YES! That was perfect! You nailed the "${activeMission.sound}" in ${activeMission.word}!`;
+      feedback = `Woohoo! You nailed it! The word was ${activeMission.word}! You are a rockstar!`;
       
       const confetti = (await import("canvas-confetti")).default;
       confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
@@ -893,8 +906,8 @@ export default function PlayPage() {
               </div>
             </div>
 
-            {/* Live Transcript Feedback */}
-            <div className="h-12 mb-4 flex items-center justify-center w-full pointer-events-none">
+            {/* Live Transcript Feedback & Prompt */}
+            <div className="h-16 mb-2 flex items-center justify-center w-full pointer-events-none">
               <AnimatePresence mode="wait">
                 {transcript ? (
                   <motion.span 
@@ -902,7 +915,7 @@ export default function PlayPage() {
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -5 }}
-                    className="text-xl md:text-2xl font-black text-slate-800 bg-white/50 backdrop-blur px-6 py-2 rounded-2xl shadow-sm border border-white/50"
+                    className="text-xl md:text-3xl font-black text-slate-800 bg-white/60 backdrop-blur px-6 py-2 rounded-2xl shadow-sm border-2 border-white"
                   >
                     "{transcript}"
                   </motion.span>
@@ -913,10 +926,24 @@ export default function PlayPage() {
                     animate={{ opacity: [0.4, 1, 0.4] }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 1.5, repeat: Infinity }}
-                    className="text-sm font-bold text-slate-400 uppercase tracking-widest"
+                    className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"
                   >
+                    <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse" />
                     Listening...
                   </motion.span>
+                ) : !success ? (
+                  <motion.div
+                    key="prompt"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="text-center"
+                  >
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Time to say:</p>
+                    <h3 className="text-3xl md:text-4xl font-black text-primary drop-shadow-sm tracking-tight">
+                      "{activeMission.word}"
+                    </h3>
+                  </motion.div>
                 ) : null}
               </AnimatePresence>
             </div>
@@ -965,10 +992,10 @@ export default function PlayPage() {
                        >
                          {isListening ? (
                            <div className="bg-white p-4 rounded-xl shadow-inner">
-                              <div className="w-5 h-5 bg-red-500 rounded-sm" />
+                              <div className="w-6 h-6 bg-red-500 rounded-sm" />
                            </div>
                          ) : (
-                           <Mic size={36} className="text-slate-700 ml-0.5" />
+                           <Mic size={40} className="text-slate-700 ml-0.5" />
                          )}
                        </motion.button>
                      </div>
@@ -990,11 +1017,14 @@ export default function PlayPage() {
                  <motion.div
                    initial={{ opacity: 0, scale: 0.8, y: 20 }}
                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                   className="flex flex-col items-center gap-4 w-full"
+                   className="flex flex-col items-center gap-6 w-full"
                  >
-                   <div className="bg-green-500 text-white px-8 py-4 rounded-[2rem] shadow-xl shadow-green-500/20 border-4 border-white flex items-center gap-3 animate-bounce cursor-default">
-                     <span className="text-2xl">🎉</span>
-                     <span className="text-xl font-black">Perfect!</span>
+                   <div className="flex flex-col items-center animate-bounce">
+                     <span className="text-6xl mb-2">🌟</span>
+                     <h3 className="text-4xl font-black text-slate-800 text-center tracking-tight leading-none">
+                       Way to go!
+                     </h3>
+                     <p className="text-slate-500 font-bold mt-1 text-lg">You nailed it!</p>
                    </div>
                    
                    <motion.button
@@ -1005,9 +1035,9 @@ export default function PlayPage() {
                         setSuccess(false);
                         setMood("happy");
                      }}
-                     className="w-full max-w-xs py-4 bg-white rounded-2xl font-black text-slate-700 shadow-lg border-2 border-white flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors cursor-pointer"
+                     className="w-full max-w-xs py-5 bg-gradient-to-r from-primary to-purple-600 rounded-[2rem] font-black text-white shadow-xl shadow-primary/30 border-4 border-white flex items-center justify-center gap-3 hover:shadow-2xl transition-all cursor-pointer text-xl"
                    >
-                     Next Mission <ArrowRight size={20} />
+                     Next Mission <ArrowRight size={24} />
                    </motion.button>
                  </motion.div>
                )}
