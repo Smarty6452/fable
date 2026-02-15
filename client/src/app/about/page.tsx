@@ -3,7 +3,8 @@
 import { motion } from "framer-motion";
 import { ArrowLeft, Github, Linkedin, Mail, Globe, Heart, Code, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { preloadTTS, playCachedTTS, stopAllTTS } from "@/lib/audio";
 
 export default function AboutPage() {
   const bubbles = useMemo(() =>
@@ -15,6 +16,30 @@ export default function AboutPage() {
       duration: 3 + (i % 3),
       delay: (i * 0.4) % 2,
     })), []);
+
+  const hasPlayedRef = useRef(false);
+
+  // Auto-Narration on Mount
+  useEffect(() => {
+    // Stop any previous audio
+    stopAllTTS();
+    
+    // Preload & Play
+    const introText = "Hi! I'm Fable. I'm here to make speech therapy free, fun, and accessible for everyone. Let me show you around!";
+    
+    const timer = setTimeout(async () => {
+      if (!hasPlayedRef.current) {
+        hasPlayedRef.current = true;
+        // Use Lauren (Best for Kids) or Emily
+        await playCachedTTS(introText, "lauren");
+      }
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
+      stopAllTTS();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-[#FFF9F2] via-[#FFE8CC] to-[#FFD9A8] relative overflow-hidden">
