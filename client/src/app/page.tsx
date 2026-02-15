@@ -125,7 +125,15 @@ export default function HomePage() {
     }
   }, []);
 
+  const [isShaking, setIsShaking] = useState(false);
+
   const handleStart = () => {
+    if (!existingUser && !name.trim()) {
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      return;
+    }
+
     if (!existingUser && name.trim()) {
       localStorage.setItem("kidName", name.trim());
       // Play a quick confirmation
@@ -138,6 +146,14 @@ export default function HomePage() {
     }
   };
 
+  const resetUser = () => {
+    if (window.confirm("Switch explorer name? Your current progress will be safe for that name!")) {
+      localStorage.removeItem("kidName");
+      setExistingUser(null);
+      setName("");
+    }
+  };
+
   // Trigger welcome on first interaction to bypass browser autoplay policy
   useEffect(() => {
     const handleFirstClick = () => {
@@ -147,11 +163,6 @@ export default function HomePage() {
     window.addEventListener("click", handleFirstClick);
     return () => window.removeEventListener("click", handleFirstClick);
   }, []);
-
-  const resetUser = () => {
-    localStorage.clear();
-    window.location.reload();
-  };
 
   return (
     <div className="min-h-screen relative overflow-hidden">
@@ -302,41 +313,42 @@ export default function HomePage() {
                 for every child.
               </motion.p>
 
-              {/* CTA & Name Input */}
-              <motion.div variants={fadeUp} className="flex flex-col items-center gap-6 mb-14 w-full max-w-md mx-auto">
+              {/* CTA & Name Input Area */}
+              <motion.div variants={fadeUp} className="flex flex-col items-center gap-6 mb-14 w-full max-w-lg mx-auto">
                 {!existingUser ? (
                   <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
+                    animate={isShaking ? { x: [-5, 5, -5, 5, 0] } : {}}
+                    transition={{ duration: 0.4 }}
                     className="w-full"
                   >
                     <div className="relative group">
                       <input
                         type="text"
-                        placeholder="Enter your name..."
+                        placeholder="Enter your name to start..."
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && name.trim() && handleStart()}
-                        className="w-full px-8 py-6 bg-white/80 backdrop-blur-xl rounded-[2rem] border-4 border-white focus:border-[#8B7FDE] outline-none text-2xl font-black text-slate-800 shadow-xl transition-all placeholder:text-slate-300 text-center"
+                        onKeyDown={(e) => e.key === 'Enter' && handleStart()}
+                        className={`w-full px-8 py-6 bg-white/80 backdrop-blur-xl rounded-[2.5rem] border-4 outline-none text-2xl font-black text-slate-800 shadow-xl transition-all placeholder:text-slate-300 text-center ${
+                          isShaking ? "border-red-400" : "border-white focus:border-[#8B7FDE]"
+                        }`}
                       />
                       <motion.div 
-                        animate={name.trim() ? { scale: [1, 1.05, 1] } : {}}
+                        animate={name.trim() ? { scale: [1, 1.1, 1] } : {}}
                         transition={{ repeat: Infinity, duration: 2 }}
-                        className="absolute -right-2 -top-2 bg-primary text-white p-2 rounded-full shadow-lg border-2 border-white scale-0 group-focus-within:scale-100 transition-transform"
+                        className="absolute -right-2 -top-2 bg-primary text-white p-2.5 rounded-full shadow-lg border-2 border-white scale-0 group-focus-within:scale-100 transition-transform"
                       >
-                        <Heart size={16} fill="white" />
+                        <Heart size={18} fill="white" />
                       </motion.div>
                     </div>
                   </motion.div>
                 ) : null}
 
-                <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+                <div className="flex flex-wrap items-center justify-center gap-4 w-full">
                   <MagneticButton
                     whileHover={{ scale: 1.03 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={handleStart}
-                    disabled={!existingUser && !name.trim()}
-                    className="group relative px-10 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-xl shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="group relative px-10 py-5 bg-gradient-to-r from-[#8B7FDE] via-[#7C6FD4] to-[#6558C4] rounded-[2rem] text-white font-black text-xl shadow-xl shadow-[#8B7FDE]/30 hover:shadow-2xl hover:shadow-[#8B7FDE]/40 transition-shadow overflow-hidden border-4 border-white cursor-pointer"
                   >
                     <motion.div
                       className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0"
@@ -350,6 +362,18 @@ export default function HomePage() {
                     </span>
                   </MagneticButton>
 
+                  {existingUser && (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={resetUser}
+                      className="flex items-center gap-2 group px-6 py-5 bg-white/60 backdrop-blur-md rounded-[2rem] border-4 border-white text-slate-500 font-black text-lg shadow-lg hover:shadow-xl transition-all cursor-pointer hover:text-red-500 hover:border-red-100"
+                    >
+                      <RefreshCw size={20} className="group-hover:rotate-180 transition-transform duration-500" />
+                      Switch User
+                    </motion.button>
+                  )}
+
                   <Link href="/parent" data-tour="parent-portal">
                     <MagneticButton
                       whileHover={{ scale: 1.03 }}
@@ -361,18 +385,6 @@ export default function HomePage() {
                     </MagneticButton>
                   </Link>
                 </div>
-
-                {existingUser && (
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={resetUser}
-                    className="flex items-center gap-2 text-slate-400 font-bold text-sm hover:text-red-400 transition-colors py-2 px-3 bg-white/40 backdrop-blur-sm rounded-full border border-white/60"
-                  >
-                    <RefreshCw size={16} />
-                    Switch User
-                  </motion.button>
-                )}
               </motion.div>
 
               {/* How It Works */}
