@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue, useSpring } from "framer-motion";
 import { Sparkles, Volume2, Mic, BarChart3, Shield, ArrowRight, RefreshCw, Heart, Star, Zap, ChevronDown } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 import GuidedTour, { HOME_TOUR_STEPS } from "@/components/GuidedTour";
 import { NotificationBell, useNotifications } from "@/components/NotificationBell";
 import WolfieMascot from "@/components/WolfieMascot";
@@ -147,11 +148,22 @@ export default function HomePage() {
   };
 
   const resetUser = () => {
-    if (window.confirm("Switch explorer name? Your current progress will be safe for that name!")) {
-      localStorage.removeItem("kidName");
-      setExistingUser(null);
-      setName("");
-    }
+    toast("Switch explorer name?", {
+      description: "Your current progress will be safe for that name!",
+      action: {
+        label: "Switch",
+        onClick: () => {
+          localStorage.removeItem("kidName");
+          setExistingUser(null);
+          setName("");
+          toast.success("Ready for a new explorer!");
+        }
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {}
+      }
+    });
   };
 
   // Trigger welcome on first interaction to bypass browser autoplay policy

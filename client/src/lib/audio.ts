@@ -67,3 +67,14 @@ export const playCachedTTS = async (text: string, voiceId: string = "lauren"): P
     });
   }
 };
+
+/**
+ * Stop any current TTS playback
+ */
+export const stopAllTTS = () => {
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio = null;
+  }
+};

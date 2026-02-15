@@ -14,7 +14,7 @@ import BuddyMascot from "@/components/BuddyMascot";
 import InteractiveBackground from "@/components/InteractiveBackground";
 import GuidedTour, { PLAY_TOUR_STEPS } from "@/components/GuidedTour";
 import { NotificationBell, useNotifications, triggerLevelUpNotification, triggerStreakNotification } from "@/components/NotificationBell";
-import { preloadTTS, playCachedTTS } from "@/lib/audio";
+import { preloadTTS, playCachedTTS, stopAllTTS } from "@/lib/audio";
 import { CHAPTERS, getUnlockedChapters, getCurrentChapter } from "@/data/chapters";
 import { MISSIONS, type Mission } from "@/data/missions";
 import { 
@@ -359,13 +359,21 @@ export default function PlayPage() {
 
 
   const logout = () => {
-    if (window.confirm("Switch explorer name? Your current progress will be safe for that name!")) {
-      localStorage.removeItem("kidName");
-      localStorage.removeItem("selectedBuddy");
-      // Keep other stats in localstorage, they are keyed by name if we were to support multiple
-      // But for now, just clear the name to force re-onboarding
-      window.location.href = "/";
-    }
+    toast("Switch explorer?", {
+      description: "Current progress will be safe for this name!",
+      action: {
+        label: "Switch",
+        onClick: () => {
+          localStorage.removeItem("kidName");
+          localStorage.removeItem("selectedBuddy");
+          window.location.href = "/";
+        }
+      },
+      cancel: {
+        label: "Cancel",
+        onClick: () => {}
+      }
+    });
   };
 
 
@@ -450,6 +458,7 @@ export default function PlayPage() {
 
 
   const playTTS = async (text: string) => {
+    stopAllTTS(); // Stop any background hover sounds immediately
     setIsSynthesizing(true);
     try {
       const voiceId = getVoiceForBuddy(selectedBuddy.id);
