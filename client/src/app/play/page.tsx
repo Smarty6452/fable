@@ -39,7 +39,6 @@ interface UserStats {
 const DIFFICULTY_XP = { easy: 10, medium: 20, hard: 30 };
 
 export default function PlayPage() {
-  const { addNotification } = useNotifications();
 
   // Refs
   const recognitionRef = useRef<any>(null);
@@ -77,9 +76,11 @@ export default function PlayPage() {
   const [showTip, setShowTip] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<{sender: 'buddy' | 'kid', text: string}[]>([]);
 
+  const [selectedChapterId, setSelectedChapterId] = useState(CHAPTERS[0].id);
+
   // Derived State
   const xpForNextLevel = level * 100;
-  const unlockedChapters = useMemo(() => getUnlockedChapters(level), [level]);
+  const unlockedChapters = useMemo(() => getUnlockedChapters(xp), [xp]);
 
   // Load Saved Progress
   useEffect(() => {
@@ -90,27 +91,59 @@ export default function PlayPage() {
     const savedStreak = localStorage.getItem("streak");
     const savedMissions = localStorage.getItem("completedMissions");
 
-    if (savedName) setKidName(savedName);
-    if (savedBuddy) setSelectedBuddy(JSON.parse(savedBuddy));
-    if (savedXp) setXp(parseInt(savedXp));
-    if (savedLevel) setLevel(parseInt(savedLevel));
-    if (savedStreak) setStreak(parseInt(savedStreak));
-    if (savedMissions) setCompletedMissions(JSON.parse(savedMissions));
-    
-    // Check Microphon access early (optional)
-    // navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => {});
-  }, []);
+    if (savedName) {
+      setKidName(savedName);
+      if (savedBuddy) {
+        const buddy = BUDDIES.find(b => b.id === savedBuddy) || JSON.parse(savedBuddy);
+        setSelectedBuddy(buddy);
+      }
+      if (savedXp) setXp(parseInt(savedXp));
+      if (savedLevel) setLevel(parseInt(savedLevel));
+      if (savedStreak) setStreak(parseInt(savedStreak));
+      if (savedMissions) setCompletedMissions(JSON.parse(savedMissions));
+      
+      setGameState("select");
+      if (savedLevel) setLevel(parseInt(savedLevel));
+      // Reset streak and completion if it's a new day? No, keep it persistent.
+
+      // Add welcome notification if none exist
+      if (localStorage.getItem("talkybuddy-notifications") === null) {
+        addNotification({
+          type: "reward",
+          title: "Welcome to Fable! 🎁",
+          message: "We're so glad you're here! Start a mission to earn your first XP points!",
+        });
+      }
+    }
+  }, [addNotification]);
 
   // Fetch Available Voices
   useEffect(() => {
     const loadVoices = () => {
       const voices = window.speechSynthesis.getVoices();
       if (voices.length > 0) {
-        setAvailableVoices(voices.map(v => ({ voiceId: v.name, displayName: v.name, gender: 'female' }))); // simplified for client-side
+        setAvailableVoices(voices.map(v => ({ voiceId: v.name, displayName: v.name, gender: 'female' }))); 
       }
     };
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
+
+    // Also fetch Smallest AI voices
+    const fetchSmallestVoices = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/voices?model=lightning-v3.1`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.voices) {
+            setAvailableVoices(prev => [...prev, ...data.voices]);
+            console.log("✅ Available Smallest AI voices:", data.voices);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch Smallest AI voices:", err);
+      }
+    };
+    fetchSmallestVoices();
   }, []);
 
   // Helper to stop all playing audio (TTS + Browser Speech)
@@ -287,93 +320,17 @@ const MISSIONS: Mission[] = [
   { id: "10", word: "Monkey", sound: "M", emoji: "🐒", difficulty: "easy", tip: "Keep your lips closed and hum!", example: "Mmm-onkey - like you're eating something yummy!" },
   { id: "11", word: "Goat", sound: "G", emoji: "🐐", difficulty: "easy", tip: "Make a sound in the back of your throat!", example: "G-g-goat - like gulping water!" },
   { id: "21", word: "Thank you", sound: "TH", emoji: "🙏", difficulty: "hard", tip: "Tongue between teeth for TH, then 'ank you'!", example: "Th-ank you - tongue peeks out then smile!" },
+  // Missions Data
   { id: "22", word: "Please help", sound: "PL", emoji: "🆘", difficulty: "hard", tip: "Pop your P then quickly lift tongue for L!", example: "Pl-ease help - pop then lift!" },
 ];
 
-const DIFFICULTY_XP = { easy: 20, medium: 25, hard: 35 };
-
-export default function PlayPage() {
-  const [gameState, setGameState] = useState<"onboarding" | "select" | "practice">("onboarding");
-  const [kidName, setKidName] = useState("");
-  const [selectedBuddy, setSelectedBuddy] = useState(BUDDIES[0]);
-  const [activeMission, setActiveMission] = useState<Mission | null>(null);
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [isSynthesizing, setIsSynthesizing] = useState(false);
-  const [xp, setXp] = useState(0);
-  const [level, setLevel] = useState(1);
-  const [success, setSuccess] = useState(false);
-  const [streak, setStreak] = useState(0);
-  const [showTip, setShowTip] = useState(false);
-  const [speechError, setSpeechError] = useState<string | null>(null);
-  const [voiceSpeed, setVoiceSpeed] = useState(0.9);
-  const [completedMissions, setCompletedMissions] = useState<string[]>([]);
-  const [attempts, setAttempts] = useState(0);
-  const [selectedChapterId, setSelectedChapterId] = useState(CHAPTERS[0].id);
-  const [availableVoices, setAvailableVoices] = useState<{voiceId: string, displayName: string}[]>([]);
-  const [conversationHistory, setConversationHistory] = useState<{sender: 'buddy'|'kid', text: string}[]>([]);
-  const [recordedAudioUrl, setRecordedAudioUrl] = useState<string | null>(null);
-  
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
 
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll, addNotification } = useNotifications();
-  const unlockedChapters = getUnlockedChapters(xp);
   const activeChapter = CHAPTERS.find(c => c.id === selectedChapterId) || CHAPTERS[0];
   const missionsForChapter = MISSIONS.filter(m => activeChapter.missions.includes(m.id));
 
   // Determine active level progression
-  const xpForNextLevel = level * 100;
 
-  useEffect(() => {
-    const savedName = localStorage.getItem("kidName");
-    const savedBuddy = localStorage.getItem("selectedBuddy");
-    const savedXp = localStorage.getItem("xp");
-    const savedLevel = localStorage.getItem("level");
-    const savedStreak = localStorage.getItem("streak");
-    const savedCompleted = localStorage.getItem("completedMissions");
-
-    if (savedName) {
-      setKidName(savedName);
-      if (savedBuddy) {
-        const buddy = BUDDIES.find(b => b.id === savedBuddy);
-        if (buddy) setSelectedBuddy(buddy);
-      }
-      if (savedXp) setXp(parseInt(savedXp));
-      if (savedLevel) setLevel(parseInt(savedLevel));
-      if (savedStreak) setStreak(parseInt(savedStreak));
-      if (savedCompleted) setCompletedMissions(JSON.parse(savedCompleted));
-      setGameState("select");
-      
-      // Add welcome notification if none exist
-      if (localStorage.getItem("talkybuddy-notifications") === null) {
-        addNotification({
-          type: "reward",
-          title: "Welcome to Fable! 🎁",
-          message: "We're so glad you're here! Start a mission to earn your first XP points!",
-        });
-      }
-    }
-
-    // Fetch available voices
-    const fetchVoices = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/voices?model=lightning-v3.1`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.voices) {
-            setAvailableVoices(data.voices);
-            console.log("✅ Available voices:", data.voices);
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to fetch voices:", err);
-      }
-    };
-    fetchVoices();
-  }, [addNotification]);
 
   const saveOnboarding = async () => {
     if (kidName.trim()) {
@@ -425,9 +382,6 @@ export default function PlayPage() {
     window.location.reload();
   };
 
-  const [mood, setMood] = useState<"happy" | "sad" | "surprised">("happy");
-
-  // ... (previous effects)
 
   const startPractice = (mission: Mission) => {
     // Unlock Audio Context for iOS/Chrome autoplay policies
@@ -522,7 +476,6 @@ export default function PlayPage() {
     }
   };
 
-  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const playTTS = async (text: string) => {
     setIsSynthesizing(true); // System is busy
@@ -578,183 +531,10 @@ export default function PlayPage() {
     if (activeMission) playTTS(`${activeMission.word}`);
   };
 
-    // Audio Analysis for Visualizer
-    const [micLevel, setMicLevel] = useState(0);
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const analyserRef = useRef<AnalyserNode | null>(null);
-    const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-    const animationFrameRef = useRef<number | null>(null);
-
-    const cleanupAudio = () => {
-      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-      if (sourceRef.current) sourceRef.current.disconnect();
-      if (analyserRef.current) analyserRef.current.disconnect();
-      if (audioContextRef.current) audioContextRef.current.close();
-      audioContextRef.current = null;
-      setMicLevel(0);
-    };
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (recognitionRef.current) recognitionRef.current.abort();
-            cleanupAudio();
-        };
-    }, []);
-
-  const startListening = () => {
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    if (!SpeechRecognition) {
-      toast.error("Voice not supported in this browser. Please use Chrome.");
-      return;
-    }
-
-    if (recognitionRef.current) {
-      recognitionRef.current.abort();
-      recognitionRef.current = null;
-    }
-    
-    cleanupAudio(); // Ensure clean slate
-
-    setTranscript("");
-    setSpeechError(null);
-    setIsListening(true);
-
-    const playPop = () => {
-      try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.frequency.setValueAtTime(600, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1000, ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.05, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.1);
-      } catch (e) { /* ignore */ }
-    };
-    playPop();
-
-    const recognition = new SpeechRecognition();
-    recognitionRef.current = recognition;
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-    recognition.maxAlternatives = 5;
-
-    let hasResult = false;
-
-    recognition.onstart = () => {
-       setIsListening(true);
-       setSpeechError(null);
-    };
-
-    recognition.onresult = (event: any) => {
-      const results = Array.from(event.results);
-      const transcriptItem = results[0] as any;
-      const text = transcriptItem[0].transcript;
-      setTranscript(text);
-      if (transcriptItem.isFinal) {
-        hasResult = true;
-        setIsListening(false);
-        cleanupAudio();
-        checkResult(text);
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      if (event.error === 'aborted') return;
-      console.error("Speech Recognition Error:", event.error);
-      setIsListening(false);
-      cleanupAudio();
-      
-      const errorMap: Record<string, string> = {
-        'no-speech': "🎤 I didn't hear anything. Speak a bit louder!",
-        'audio-capture': "🎤 No microphone found. Is it plugged in?",
-        'not-allowed': "🔒 Microphone blocked. Check your browser settings.",
-        'network': "📶 Network error. Please check your internet.",
-      };
-      setSpeechError(errorMap[event.error] || "⚠️ Oops! Let's try that again.");
-      if (event.error === 'not-allowed') toast.error("Microphone access is blocked! 🔒");
-    };
-
-    recognition.onend = () => {
-      if (!hasResult) {
-        setIsListening(false);
-        cleanupAudio();
-      }
-      recognitionRef.current = null;
-    };
-
-    try {
-      recognition.start();
-
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-        // 1. Audio Visualizer Setup
-        try {
-          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-          if (AudioContext) {
-            const audioCtx = new AudioContext();
-            audioContextRef.current = audioCtx;
-            const analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 32;
-            analyserRef.current = analyser;
-            const source = audioCtx.createMediaStreamSource(stream);
-            sourceRef.current = source;
-            source.connect(analyser);
-
-            const bufferLength = analyser.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-
-            const updateVolume = () => {
-              if (!analyserRef.current) return;
-              analyser.getByteFrequencyData(dataArray);
-              const sum = dataArray.reduce((a, b) => a + b, 0);
-              const avg = sum / bufferLength;
-              setMicLevel(avg); // 0-255 roughly
-              animationFrameRef.current = requestAnimationFrame(updateVolume);
-            };
-            updateVolume();
-          }
-        } catch (e) {
-          console.warn("Audio Visualizer Init Failed", e);
-        }
-
-        // 2. MediaRecorder (Keep existing logic if needed, or remove if unused. Keep for now as backup)
-        try {
-          const mediaRecorder = new MediaRecorder(stream);
-          mediaRecorderRef.current = mediaRecorder;
-          audioChunksRef.current = [];
-          mediaRecorder.ondataavailable = (event) => { if (event.data.size > 0) audioChunksRef.current.push(event.data); };
-          mediaRecorder.onstop = () => {
-             stream.getTracks().forEach(track => track.stop());
-          };
-          mediaRecorder.start();
-        } catch (e) { console.warn("MediaRecorder failed", e); }
-      }).catch(err => {
-          console.warn("Mic stream failed", err);
-          // Don't kill recognition just because visualizer failed
-      });
-
-    } catch (err) {
-      console.error("Speech start error", err);
-      setIsListening(false);
-      
-      cleanupAudio();
-      setSpeechError("⚠️ Could not start microphone.");
-    }
-  };
 
   const toggleListening = () => {
     if (isListening) {
       if (recognitionRef.current) recognitionRef.current.abort();
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-        mediaRecorderRef.current.stop();
-      }
       setIsListening(false);
     } else {
       startListening();
@@ -1204,33 +984,7 @@ export default function PlayPage() {
                     "{transcript}"
                   </motion.span>
                 ) : isListening ? (
-                  <motion.div
-                    key="listening"
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    className="flex items-center gap-3 bg-white/80 backdrop-blur-md px-5 py-2 rounded-full border border-red-100 shadow-sm text-red-500"
-                  >
-                     <div className="flex items-center gap-1 h-6">
-                        <motion.div 
-                          animate={{ height: Math.min(20, Math.max(4, micLevel * 0.2)) }} 
-                          className="w-1.5 bg-red-400 rounded-full" 
-                        />
-                        <motion.div 
-                          animate={{ height: Math.min(24, Math.max(8, micLevel * 0.4)) }} 
-                          className="w-1.5 bg-red-500 rounded-full" 
-                        />
-                        <motion.div 
-                          animate={{ height: Math.min(20, Math.max(4, micLevel * 0.25)) }} 
-                          className="w-1.5 bg-red-400 rounded-full" 
-                        />
-                        <motion.div 
-                          animate={{ height: Math.min(16, Math.max(4, micLevel * 0.15)) }} 
-                          className="w-1.5 bg-red-300 rounded-full" 
-                        />
-                     </div>
-                    <span className="text-sm font-bold uppercase tracking-widest animate-pulse">Listening...</span>
-                  </motion.div>
+                  <MicVisualizer stream={stream} />
                 ) : !success ? (
                   <motion.div
                     key="prompt"
